@@ -7,12 +7,14 @@ import java.util.regex.Pattern
 
 object BankNotificationParser {
 
-    // Supported Bank package identifiers
+    // Supported Bank and Fintech package identifiers
     const val PKG_BBVA = "com.bbva.bbvamx"
     const val PKG_BANORTE = "mx.banorte"
     const val PKG_NU = "com.nu.production"
     const val PKG_SANTANDER = "com.santander.mx"
     const val PKG_BANAMEX = "com.citibanamex.movil"
+    const val PKG_MERCADO_PAGO = "com.mercadopago.wallet"
+    const val PKG_MERCADO_LIBRE = "com.mercadolibre"
 
     data class ParsedBankResult(
         val bankPackage: String,
@@ -32,7 +34,9 @@ object BankNotificationParser {
                 packageName.contains("nu", ignoreCase = true) ||
                 packageName.contains("santander", ignoreCase = true) ||
                 packageName.contains("banamex", ignoreCase = true) ||
-                packageName.contains("citibanamex", ignoreCase = true)
+                packageName.contains("citibanamex", ignoreCase = true) ||
+                packageName.contains("mercadopago", ignoreCase = true) ||
+                packageName.contains("mercadolibre", ignoreCase = true)
     }
 
     fun parseNotification(packageName: String, title: String, text: String, timestamp: Long): ParsedBankResult? {
@@ -67,6 +71,7 @@ object BankNotificationParser {
     private fun resolveBankInfo(pkg: String, content: String): Pair<String, String> {
         val lower = (pkg + " " + content).lowercase(Locale.ROOT)
         return when {
+            lower.contains("mercadopago") || lower.contains("mercado pago") || lower.contains("mercadolibre") -> PKG_MERCADO_PAGO to "Mercado Pago"
             lower.contains("bbva") -> PKG_BBVA to "BBVA México"
             lower.contains("banorte") -> PKG_BANORTE to "Banorte Móvil"
             lower.contains("nu") || lower.contains("nubank") -> PKG_NU to "Nu Tarjeta"
@@ -101,6 +106,8 @@ object BankNotificationParser {
             .replace("ú", "u")
         return when {
             lower.contains("deposito") || lower.contains("abono") || lower.contains("recibiste") ||
+            lower.contains("te transfirieron") || lower.contains("te enviaron") ||
+            lower.contains("dinero recibido") || lower.contains("ingreso de dinero") ||
             lower.contains("transferencia recibida") || lower.contains("nomina") ||
             lower.contains("ingreso") -> "income"
             else -> "expense"
@@ -109,6 +116,31 @@ object BankNotificationParser {
 
     private fun extractMerchant(content: String, bankName: String): String {
         val lower = content.lowercase(Locale.ROOT)
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+
+        // Mercado Pago specific patterns
+        if (bankName.contains("Mercado Pago", ignoreCase = true)) {
+            val transferToRegex = Regex("""(?:transferiste|enviaste)\b.*?a\s+([A-Za-z\s]{3,24})""", RegexOption.IGNORE_CASE)
+            val toMatch = transferToRegex.find(content)
+            if (toMatch != null) {
+                val name = toMatch.groupValues[1].trim().trimEnd('.', ',', '!')
+                return "Transferencia a ${name.split(" ").filter { it.isNotBlank() }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }}"
+            }
+
+            val transferFromRegex = Regex("""(?:te transfirieron|recibiste|te enviaron|ingreso)\b.*?de\s+([A-Za-z\s]{3,24})""", RegexOption.IGNORE_CASE)
+            val fromMatch = transferFromRegex.find(content)
+            if (fromMatch != null) {
+                val name = fromMatch.groupValues[1].trim().trimEnd('.', ',', '!')
+                return "Transferencia de ${name.split(" ").filter { it.isNotBlank() }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }}"
+            }
+
+            if (lower.contains("mercado libre")) return "Mercado Libre"
+        }
+
         // Check canonical merchants first
         when {
             lower.contains("walmart") -> return "Walmart Supercenter"
@@ -123,6 +155,7 @@ object BankNotificationParser {
             lower.contains("cfe") -> return "CFE Electricidad"
             lower.contains("farmacia") -> return "Farmacias del Ahorro"
             lower.contains("cajero") || lower.contains("retiro") -> return "Retiro ATM"
+            lower.contains("mercado pago") -> return "Mercado Pago"
         }
 
         // Patterns like "en OXXO", "en WALMART", "compra en LIVERPOOL", "en AMAZON con tarjeta"
@@ -137,14 +170,14 @@ object BankNotificationParser {
             }
         }
 
-        return "Comercio Detectado"
+        return if (bankName.contains("Mercado Pago", ignoreCase = true)) "Mercado Pago" else "Comercio Detectado"
     }
 
     private fun extractLastFour(content: String): String {
         // Matches *1234 or tarjeta 1234 or terminacion 1234
         val regex = Regex("""(?:\*|terminaci[oó]n|cuenta|tarjeta)?\s*\*?(\d{4})\b""", RegexOption.IGNORE_CASE)
         val match = regex.find(content)
-        return match?.groupValues?.get(1) ?: "4821"
+        return match?.groupValues?.get(1) ?: "MP"
     }
 
     private fun suggestCategory(merchant: String, type: String): String {
@@ -159,7 +192,8 @@ object BankNotificationParser {
             lower.contains("pemex") || lower.contains("shell") -> "cat_transporte"
 
             lower.contains("netflix") || lower.contains("spotify") || lower.contains("cine") ||
-            lower.contains("liverpool") || lower.contains("playstation") -> "cat_entretenimiento"
+            lower.contains("liverpool") || lower.contains("playstation") ||
+            lower.contains("mercado libre") -> "cat_entretenimiento"
 
             lower.contains("cfe") || lower.contains("totalplay") || lower.contains("telmex") ||
             lower.contains("renta") || lower.contains("luz") || lower.contains("agua") -> "cat_servicios"

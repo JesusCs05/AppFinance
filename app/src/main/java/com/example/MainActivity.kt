@@ -79,11 +79,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            com.example.util.configureAppCheck(this, intent)
-        } catch (e: Throwable) {
-            android.util.Log.e("MainActivity", "Failed to configure AppCheck", e)
-        }
         enableEdgeToEdge()
 
         setContent {

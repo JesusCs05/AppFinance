@@ -40,22 +40,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import android.app.Activity
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
-import androidx.credentials.CredentialManager
-import com.example.ui.auth.GoogleAuthHelper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,8 +102,6 @@ fun DashboardScreen(
     val pendingDrafts by viewModel.pendingBankDrafts.collectAsStateWithLifecycle()
     val isPrivacyMode by viewModel.isPrivacyMode.collectAsStateWithLifecycle()
     val isBiometricProtected by viewModel.isBiometricProtected.collectAsStateWithLifecycle()
-    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
-    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
 
     val totalNetWorth = accounts.sumOf { it.balance }
     val totalIncome = transactions.filter { it.type == "income" }.sumOf { it.amount }
@@ -222,15 +210,6 @@ fun DashboardScreen(
             }
         }
 
-        // Firebase Cloud Sync Card
-        item {
-            FirebaseCloudSyncCard(
-                currentUser = currentUser,
-                syncStatus = syncStatus,
-                onSyncNow = { viewModel.syncWithCloud() },
-                onRefreshUser = { viewModel.refreshUser() }
-            )
-        }
 
         // Hero Balance Card
         item {
@@ -326,14 +305,18 @@ fun DashboardScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(accounts) { account ->
-                        AccountPillCard(
-                            account = account,
-                            isPrivacyHidden = isPrivacyMode
-                        )
+                if (accounts.isEmpty()) {
+                    ZeroAccountsCard(onCreateAccount = { showNewAccountDialog = true })
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(accounts) { account ->
+                            AccountPillCard(
+                                account = account,
+                                isPrivacyHidden = isPrivacyMode
+                            )
+                        }
                     }
                 }
             }
@@ -948,228 +931,53 @@ private fun TransactionItemRow(
 }
 
 @Composable
-fun FirebaseCloudSyncCard(
-    currentUser: com.google.firebase.auth.FirebaseUser?,
-    syncStatus: String,
-    onSyncNow: () -> Unit,
-    onRefreshUser: () -> Unit
+fun ZeroAccountsCard(
+    onCreateAccount: () -> Unit
 ) {
-    val context = LocalContext.current
-    val activity = context as? Activity
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember { CredentialManager.create(context) }
-    var authError by remember { mutableStateOf<String?>(null) }
-    var isSigningIn by remember { mutableStateOf(false) }
-
     AetherCard(
         modifier = Modifier.fillMaxWidth(),
-        backgroundColor = if (currentUser != null) DarkSurfaceElevated else CharcoalDark,
-        borderColor = if (currentUser != null) RoyalIndigo.copy(alpha = 0.6f) else CharcoalBorder
+        borderColor = RoyalIndigoLight.copy(alpha = 0.5f)
     ) {
-        Column {
-            if (currentUser != null) {
-                // Signed In View
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(RoyalIndigo),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = (currentUser.displayName?.take(1) ?: currentUser.email?.take(1) ?: "U").uppercase(Locale.ROOT),
-                                fontFamily = JetBrainsMono,
-                                fontWeight = FontWeight.Bold,
-                                color = MetallicSilverLight,
-                                fontSize = 14.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = currentUser.displayName ?: "Usuario Conectado",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MetallicSilverLight
-                            )
-                            Text(
-                                text = currentUser.email ?: "",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MetallicSilverMuted
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(EmeraldIncome.copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CloudDone,
-                                contentDescription = null,
-                                tint = EmeraldIncome,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = syncStatus.uppercase(Locale.ROOT),
-                                fontFamily = JetBrainsMono,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldIncome
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            GoogleAuthHelper.signOut(credentialManager, scope) {
-                                onRefreshUser()
-                            }
-                        },
-                        modifier = Modifier.height(34.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MetallicSilverMuted),
-                        contentPadding = PaddingValues(horizontal = 10.dp)
-                    ) {
-                        Text("Cerrar Sesión", fontSize = 11.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = onSyncNow,
-                        modifier = Modifier.height(34.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight),
-                        contentPadding = PaddingValues(horizontal = 12.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Sincronizar Firestore", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            } else {
-                // Not Signed In View
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(RoyalIndigo.copy(alpha = 0.3f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = null,
-                            tint = VioletAccent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Respaldo en la Nube con Google",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MetallicSilverLight
-                        )
-                        Text(
-                            text = "Sincroniza tus finanzas en Firebase Firestore",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MetallicSilverMuted
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (authError != null) {
-                    Text(
-                        text = authError!!,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = RubyExpense,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        if (activity != null) {
-                            isSigningIn = true
-                            authError = null
-                            GoogleAuthHelper.onGoogleSignInClicked(
-                                activity = activity,
-                                credentialManager = credentialManager,
-                                onAuthSuccess = {
-                                    isSigningIn = false
-                                    onRefreshUser()
-                                    onSyncNow()
-                                },
-                                onAuthError = { err ->
-                                    isSigningIn = false
-                                    authError = err
-                                },
-                                scope = scope,
-                                onAuthCancelled = {
-                                    isSigningIn = false
-                                }
-                            )
-                        }
-                    },
-                    enabled = !isSigningIn,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .testTag("google_sign_in_button"),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = RoyalIndigoLight,
-                        contentColor = MetallicSilverLight
-                    )
-                ) {
-                    if (isSigningIn) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MetallicSilverLight,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Conectando con Google...", fontSize = 12.sp)
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Iniciar Sesión con Google",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(RoyalIndigo.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CreditCard,
+                    contentDescription = null,
+                    tint = RoyalIndigoLight,
+                    modifier = Modifier.size(24.dp)
+                )
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Comienza agregando tu primera cuenta",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MetallicSilverLight
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Registra efectivo, tarjeta de débito/crédito o Mercado Pago para comenzar a gestionar tus finanzas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MetallicSilverMuted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            AetherButton(
+                text = "+ Crear Primera Cuenta",
+                onClick = onCreateAccount,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            )
         }
     }
 }

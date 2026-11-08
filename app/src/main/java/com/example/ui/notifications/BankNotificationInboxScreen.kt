@@ -273,9 +273,44 @@ fun BankNotificationInboxScreen(
                 ) {
                     BankMonitorBadge("BBVA México", Color(0xFF004481))
                     BankMonitorBadge("Nu Tarjeta", Color(0xFF820AD1))
+                    BankMonitorBadge("Mercado Pago", Color(0xFF009EE3))
                     BankMonitorBadge("Banorte Móvil", Color(0xFFB91C1C))
                     BankMonitorBadge("Santander", Color(0xFFDC2626))
                     BankMonitorBadge("Citibanamex", Color(0xFF002D72))
+                }
+            }
+        }
+
+        // Quick simulation for testing
+        item {
+            Column {
+                Text(
+                    text = "Probar Parser con Notificación Simulada",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VioletAccent,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SimulationChip(
+                        name = "+ Mercado Pago",
+                        color = Color(0xFF009EE3),
+                        onClick = { viewModel.simulateBankNotification("mercadopago") }
+                    )
+                    SimulationChip(
+                        name = "+ BBVA",
+                        color = Color(0xFF004481),
+                        onClick = { viewModel.simulateBankNotification("bbva") }
+                    )
+                    SimulationChip(
+                        name = "+ Nu",
+                        color = Color(0xFF820AD1),
+                        onClick = { viewModel.simulateBankNotification("nu") }
+                    )
                 }
             }
         }
@@ -564,3 +599,24 @@ private fun openNotificationSettings(context: Context) {
         context.startActivity(intent)
     }
 }
+
+@Composable
+private fun SimulationChip(name: String, color: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.2f))
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = name,
+            fontFamily = JetBrainsMono,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MetallicSilverLight
+        )
+    }
+}
+

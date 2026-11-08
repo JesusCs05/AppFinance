@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -98,6 +100,87 @@ fun AiCopilotScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val isImeVisible = WindowInsets.isImeVisible
+    var showApiKeyDialog by remember { mutableStateOf(false) }
+    var isOnlineAi by remember { mutableStateOf(viewModel.isOnlineAiConfigured()) }
+
+    if (showApiKeyDialog) {
+        var tempKey by remember { mutableStateOf(viewModel.getCustomApiKey()) }
+        AlertDialog(
+            onDismissRequest = { showApiKeyDialog = false },
+            containerColor = DarkSurfaceElevated,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.VpnKey,
+                        contentDescription = null,
+                        tint = VioletAccent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Configurar Clave Gemini",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MetallicSilverLight,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Opcional: Si configuras tu clave API de Google AI Studio, el Copiloto responderá usando Gemini 2.5 Flash en la nube mediante REST seguro.\n\nSi la dejas en blanco, el Copiloto funcionará 100% offline con el motor financiero local nativo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MetallicSilverMuted,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = tempKey,
+                        onValueChange = { tempKey = it },
+                        label = { Text("API Key de Gemini (Opcional)") },
+                        placeholder = { Text("AIzaSy...") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VioletAccent,
+                            unfocusedBorderColor = CharcoalBorder,
+                            focusedTextColor = MetallicSilverLight,
+                            unfocusedTextColor = MetallicSilverLight,
+                            focusedLabelColor = VioletAccent,
+                            unfocusedLabelColor = MetallicSilverMuted
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.saveCustomApiKey(tempKey.trim())
+                        isOnlineAi = viewModel.isOnlineAiConfigured()
+                        showApiKeyDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight)
+                ) {
+                    Text("Guardar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        if (tempKey.isNotBlank()) {
+                            viewModel.saveCustomApiKey("")
+                            tempKey = ""
+                            isOnlineAi = viewModel.isOnlineAiConfigured()
+                        }
+                        showApiKeyDialog = false
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MetallicSilverMuted)
+                ) {
+                    Text(if (tempKey.isNotBlank()) "Borrar Clave" else "Cerrar")
+                }
+            }
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -150,7 +233,7 @@ fun AiCopilotScreen(
                 )
             }
             Spacer(modifier = Modifier.width(10.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "AETHER COPILOT",
                     style = MaterialTheme.typography.titleMedium,
@@ -159,9 +242,24 @@ fun AiCopilotScreen(
                     color = MetallicSilverLight
                 )
                 Text(
-                    text = "Voz & Chat Financiero Inteligente",
+                    text = if (isOnlineAi) "Gemini Flash Online" else "Motor Financiero Local",
                     style = MaterialTheme.typography.labelSmall,
-                    color = VioletAccent
+                    color = if (isOnlineAi) EmeraldIncome else VioletAccent
+                )
+            }
+
+            IconButton(
+                onClick = { showApiKeyDialog = true },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(CharcoalDark)
+                    .size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.VpnKey,
+                    contentDescription = "Configurar clave Gemini",
+                    tint = if (isOnlineAi) EmeraldIncome else MetallicSilverMuted,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

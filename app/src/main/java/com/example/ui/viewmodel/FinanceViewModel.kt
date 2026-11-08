@@ -1,6 +1,5 @@
 package com.example.ui.viewmodel
 
-import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,8 +9,6 @@ import com.example.data.model.BankNotificationDraftEntity
 import com.example.data.model.CategoryEntity
 import com.example.data.model.RecurringRuleEntity
 import com.example.data.model.TransactionEntity
-import com.example.data.remote.FirestoreSyncService
-import com.example.data.repository.AuthRepository
 import com.example.data.repository.FinanceRepository
 import com.example.data.service.BankNotificationParser
 import com.example.domain.copilot.AiCopilotEngine
@@ -20,7 +17,6 @@ import com.example.domain.copilot.CopilotToolCall
 import com.example.domain.copilot.GeminiCopilotService
 import com.example.domain.recurring.RecurringPaymentScheduler
 import com.example.util.VoiceInputManager
-import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,59 +39,24 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     private val db = AppDatabase.getInstance(application)
     private val repository: FinanceRepository = FinanceRepository(db)
-    private val syncService: FirestoreSyncService = FirestoreSyncService(application)
-    val authRepository: AuthRepository = AuthRepository(application)
     private val geminiService: GeminiCopilotService = GeminiCopilotService(application)
     val voiceInputManager: VoiceInputManager = VoiceInputManager(application)
 
     init {
-        // Attempt silent background sign-in
-        authRepository.attemptAutoSignIn(viewModelScope)
         // Check due recurring rules on startup
         processDueRecurringRules()
     }
 
-    val currentUser: StateFlow<FirebaseUser?> = authRepository.currentUser
-    val isAuthLoading: StateFlow<Boolean> = authRepository.isLoading
-    val authError: StateFlow<String?> = authRepository.authError
-
-    private val _syncStatus = MutableStateFlow<String>("Listo")
-    val syncStatus: StateFlow<String> = _syncStatus.asStateFlow()
-
     private val _recurringNotification = MutableStateFlow<String?>(null)
     val recurringNotification: StateFlow<String?> = _recurringNotification.asStateFlow()
 
-    fun refreshUser() {
-        authRepository.attemptAutoSignIn(viewModelScope)
+    fun getCustomApiKey(): String = geminiService.getCustomApiKey()
+
+    fun saveCustomApiKey(key: String) {
+        geminiService.saveCustomApiKey(key)
     }
 
-    fun signInWithGoogle(activity: Activity) {
-        authRepository.signInWithGoogle(activity, viewModelScope, onSuccess = {
-            syncWithCloud()
-        })
-    }
-
-    fun signOut() {
-        authRepository.signOut(viewModelScope)
-    }
-
-    fun syncWithCloud() {
-        val user = currentUser.value ?: return
-        viewModelScope.launch {
-            _syncStatus.value = "Sincronizando..."
-            try {
-                syncService.syncUserToCloud()
-                syncService.syncAccountsToCloud(accounts.value)
-                syncService.syncTransactionsToCloud(transactions.value)
-                syncService.syncBankDraftsToCloud(allBankDrafts.value)
-                _syncStatus.value = "Nube al día"
-                delay(2000)
-                _syncStatus.value = "Listo"
-            } catch (e: Exception) {
-                _syncStatus.value = "Error sincronización"
-            }
-        }
-    }
+    fun isOnlineAiConfigured(): Boolean = geminiService.isOnlineAiConfigured()
 
     val accounts: StateFlow<List<AccountEntity>> = repository.allAccounts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -177,18 +138,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun createNewAccount(account: AccountEntity) {
         viewModelScope.launch {
             repository.insertAccount(account)
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
         }
     }
 
     fun updateCategoryBudget(category: CategoryEntity) {
         viewModelScope.launch {
             repository.updateCategory(category)
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
         }
     }
 
@@ -197,9 +152,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
             val result = RecurringPaymentScheduler.evaluateAndProcessDueRules(db, repository)
             if (result.processedCount > 0) {
                 _recurringNotification.value = "Se aplicaron ${result.processedCount} cargos periódicos: $${"%,.2f".format(result.totalAmount)} MXN"
-                if (currentUser.value != null) {
-                    syncWithCloud()
-                }
             }
         }
     }
@@ -256,11 +208,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
 
-            // Sync to Firestore if user is authenticated
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
-
             _editingTransaction.value = null
             _currentScreen.value = AppScreen.DASHBOARD
         }
@@ -269,39 +216,36 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun deleteTransaction(tx: TransactionEntity) {
         viewModelScope.launch {
             repository.deleteTransaction(tx)
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
         }
     }
 
     // Bank notification handling
     fun commitBankDraft(draft: BankNotificationDraftEntity, targetAccountId: String? = null) {
         viewModelScope.launch {
-            val accId = targetAccountId ?: (accounts.value.find { it.lastFourDigits == draft.accountLastFour }?.id ?: accounts.value.firstOrNull()?.id ?: "acc_bbva")
+            val accId = targetAccountId ?: (accounts.value.find { it.lastFourDigits == draft.accountLastFour }?.id ?: accounts.value.firstOrNull()?.id ?: "acc_default")
             repository.commitDraftWithTransaction(
                 draft = draft,
                 targetAccountId = accId,
                 targetCategoryId = draft.suggestedCategoryId
             )
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
         }
     }
 
     fun dismissBankDraft(draftId: String) {
         viewModelScope.launch {
             repository.dismissBankDraft(draftId)
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
         }
     }
 
     fun simulateBankNotification(bank: String) {
         viewModelScope.launch {
             val (pkg, name, sampleMsg, lastFour) = when (bank) {
+                "mercadopago" -> Quadruple(
+                    BankNotificationParser.PKG_MERCADO_PAGO,
+                    "Mercado Pago",
+                    "Mercado Pago: Transferiste \$${(100..1500).random()}.00 a Juan Pérez.",
+                    "MP"
+                )
                 "bbva" -> Quadruple(
                     BankNotificationParser.PKG_BBVA,
                     "BBVA México",
@@ -417,9 +361,6 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
 
-            if (currentUser.value != null) {
-                syncWithCloud()
-            }
 
             // Copilot confirmation reply
             val ackMsg = CopilotMessage(
