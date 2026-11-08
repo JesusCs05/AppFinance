@@ -8,7 +8,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -52,15 +51,22 @@ class AuthRepository(private val context: Context) {
         _authError.value = null
     }
 
+    private fun getGoogleClientId(): String? {
+        val resourceId = context.resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        return resourceId.takeIf { it != 0 }?.let(context::getString)
+    }
+
     fun attemptAutoSignIn(scope: CoroutineScope) {
         if (auth.currentUser != null) {
             _currentUser.value = auth.currentUser
             return
         }
 
-        val clientId = try {
-            context.getString(R.string.default_web_client_id)
-        } catch (e: Exception) {
+        val clientId = getGoogleClientId() ?: run {
             Log.w("Auth", "default_web_client_id not found for auto sign-in")
             return
         }
@@ -101,9 +107,7 @@ class AuthRepository(private val context: Context) {
         _isLoading.value = true
         _authError.value = null
 
-        val clientId = try {
-            context.getString(R.string.default_web_client_id)
-        } catch (e: Exception) {
+        val clientId = getGoogleClientId() ?: run {
             _isLoading.value = false
             val err = "Configuración no disponible: falta default_web_client_id"
             _authError.value = err
