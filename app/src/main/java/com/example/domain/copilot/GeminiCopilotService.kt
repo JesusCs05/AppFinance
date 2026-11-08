@@ -16,9 +16,14 @@ import java.util.UUID
 class GeminiCopilotService(private val context: Context) {
 
     private val model by lazy {
-        Firebase.ai.generativeModel(
-            modelName = "gemini-3.8-flash"
-        )
+        try {
+            Firebase.ai.generativeModel(
+                modelName = "gemini-3.8-flash"
+            )
+        } catch (e: Throwable) {
+            Log.w("GeminiCopilotService", "Failed to initialize Firebase AI model: ${e.message}")
+            null
+        }
     }
 
     suspend fun generateFinancialAdvice(
@@ -28,6 +33,11 @@ class GeminiCopilotService(private val context: Context) {
         transactions: List<TransactionEntity>
     ): CopilotMessage = withContext(Dispatchers.IO) {
         try {
+            val generativeModel = model
+            if (generativeModel == null) {
+                return@withContext AiCopilotEngine.processPrompt(prompt, accounts, categories, transactions)
+            }
+
             // Compute financial context summary
             val totalIncome = transactions.filter { it.type == "income" }.sumOf { it.amount }
             val totalExpense = transactions.filter { it.type == "expense" }.sumOf { it.amount }
@@ -51,7 +61,7 @@ class GeminiCopilotService(private val context: Context) {
             """.trimIndent()
 
             val response = withTimeout(40_000L) {
-                model.generateContent(systemContext)
+                generativeModel.generateContent(systemContext)
             }
 
             val text = response.text

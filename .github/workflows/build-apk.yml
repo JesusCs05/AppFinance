@@ -36,6 +36,60 @@ jobs:
           fi
           touch .env
 
+          # Asegurar existencia de google-services.json
+          if [ ! -f app/google-services.json ]; then
+            echo "Restaurando app/google-services.json..."
+            cat << 'EOF' > app/google-services.json
+{
+  "project_info": {
+    "project_number": "686838452337",
+    "project_id": "gen-lang-client-0002612712",
+    "storage_bucket": "gen-lang-client-0002612712.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:686838452337:android:42d3fd8f573f54470bcbd0",
+        "android_client_info": {
+          "package_name": "com.aistudio.aetherpay.vxrkpm"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "686838452337-v2m3qeqod6l87npgvcpbk8jm463c76j7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.aetherpay.vxrkpm",
+            "certificate_hash": "0762c70b365773a3cc6c923e999671bae9ec8665"
+          }
+        },
+        {
+          "client_id": "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgS1BD5lvVt1GCpHKj-t8eohNUXyqmwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+EOF
+          fi
+
           # Generar keystore de depuración requerido por build.gradle.kts
           keytool -genkeypair -v \
             -keystore debug.keystore \

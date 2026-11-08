@@ -18,9 +18,14 @@ import kotlinx.coroutines.withContext
 
 class FirestoreSyncManager(private val context: Context) {
 
-    private val db: FirebaseFirestore by lazy {
-        val dbId = context.getString(R.string.firestore_database_id)
-        FirebaseFirestore.getInstance(dbId)
+    private val db: FirebaseFirestore? by lazy {
+        try {
+            val dbId = context.getString(R.string.firestore_database_id)
+            FirebaseFirestore.getInstance(dbId)
+        } catch (e: Throwable) {
+            Log.e("FirestoreSync", "Failed to get FirebaseFirestore instance", e)
+            null
+        }
     }
 
     private val _isSyncing = MutableStateFlow(false)
@@ -30,8 +35,9 @@ class FirestoreSyncManager(private val context: Context) {
     val lastSyncTime: StateFlow<Long?> = _lastSyncTime.asStateFlow()
 
     suspend fun syncTransactionToCloud(userId: String, tx: TransactionEntity) = withContext(Dispatchers.IO) {
+        val firestore = db ?: return@withContext
         try {
-            val docRef = db.collection("users").document(userId).collection("transactions").document(tx.id)
+            val docRef = firestore.collection("users").document(userId).collection("transactions").document(tx.id)
             val payload = hashMapOf<String, Any>(
                 "userId" to userId,
                 "accountId" to tx.accountId,
@@ -53,8 +59,9 @@ class FirestoreSyncManager(private val context: Context) {
     }
 
     suspend fun deleteTransactionFromCloud(userId: String, transactionId: String) = withContext(Dispatchers.IO) {
+        val firestore = db ?: return@withContext
         try {
-            db.collection("users").document(userId).collection("transactions").document(transactionId).delete().await()
+            firestore.collection("users").document(userId).collection("transactions").document(transactionId).delete().await()
             Log.d("FirestoreSync", "Transaction deleted from cloud: $transactionId")
         } catch (e: Exception) {
             Log.e("FirestoreSync", "Error deleting transaction from cloud", e)
@@ -62,8 +69,9 @@ class FirestoreSyncManager(private val context: Context) {
     }
 
     suspend fun syncAccountToCloud(userId: String, account: AccountEntity) = withContext(Dispatchers.IO) {
+        val firestore = db ?: return@withContext
         try {
-            val docRef = db.collection("users").document(userId).collection("accounts").document(account.id)
+            val docRef = firestore.collection("users").document(userId).collection("accounts").document(account.id)
             val payload = hashMapOf<String, Any>(
                 "userId" to userId,
                 "name" to account.name,
@@ -80,8 +88,9 @@ class FirestoreSyncManager(private val context: Context) {
     }
 
     suspend fun syncCategoryToCloud(userId: String, category: CategoryEntity) = withContext(Dispatchers.IO) {
+        val firestore = db ?: return@withContext
         try {
-            val docRef = db.collection("users").document(userId).collection("categories").document(category.id)
+            val docRef = firestore.collection("users").document(userId).collection("categories").document(category.id)
             val payload = hashMapOf<String, Any>(
                 "userId" to userId,
                 "name" to category.name,
@@ -103,6 +112,7 @@ class FirestoreSyncManager(private val context: Context) {
         localCategories: List<CategoryEntity>,
         localTransactions: List<TransactionEntity>
     ) = withContext(Dispatchers.IO) {
+        if (db == null) return@withContext
         _isSyncing.value = true
         try {
             // Push accounts

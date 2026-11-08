@@ -26,7 +26,16 @@ import kotlinx.coroutines.withContext
 
 object GoogleAuthHelper {
 
-    fun getCurrentUser(): FirebaseUser? = Firebase.auth.currentUser
+    private fun getAuth(): FirebaseAuth? {
+        return try {
+            Firebase.auth
+        } catch (e: Throwable) {
+            Log.e("GoogleAuthHelper", "Failed to access FirebaseAuth", e)
+            null
+        }
+    }
+
+    fun getCurrentUser(): FirebaseUser? = getAuth()?.currentUser
 
     private fun getGoogleClientId(context: Context): String? {
         val resourceId = context.resources.getIdentifier(
@@ -34,7 +43,8 @@ object GoogleAuthHelper {
             "string",
             context.packageName
         )
-        return resourceId.takeIf { it != 0 }?.let(context::getString)
+        val resValue = resourceId.takeIf { it != 0 }?.let(context::getString)
+        return resValue ?: "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com"
     }
 
     fun onGoogleSignInClicked(
@@ -45,8 +55,14 @@ object GoogleAuthHelper {
         scope: CoroutineScope,
         onAuthCancelled: () -> Unit = {}
     ) {
+        val auth = getAuth()
+        if (auth == null) {
+            onAuthError("Servicio de autenticación no inicializado")
+            return
+        }
+
         val clientId = getGoogleClientId(activity)
-            ?: return onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+            ?: return onAuthError("Google Sign-In configuration missing: client ID not found")
 
         val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
         val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
@@ -58,7 +74,7 @@ object GoogleAuthHelper {
                 if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                    val authResult = Firebase.auth.signInWithCredential(authCredential).await()
+                    val authResult = auth.signInWithCredential(authCredential).await()
                     val user = authResult.user
                     if (user != null) {
                         onAuthSuccess(user)
@@ -85,7 +101,13 @@ object GoogleAuthHelper {
         onUnauthenticated: () -> Unit,
         scope: CoroutineScope
     ) {
-        val current = Firebase.auth.currentUser
+        val auth = getAuth()
+        if (auth == null) {
+            onUnauthenticated()
+            return
+        }
+
+        val current = auth.currentUser
         if (current != null) {
             onAuthSuccess(current)
             return
@@ -108,7 +130,7 @@ object GoogleAuthHelper {
                 if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                    val authResult = Firebase.auth.signInWithCredential(authCredential).await()
+                    val authResult = auth.signInWithCredential(authCredential).await()
                     val user = authResult.user
                     if (user != null) {
                         onAuthSuccess(user)
@@ -136,7 +158,11 @@ object GoogleAuthHelper {
                 } catch (e: Exception) {
                     Log.w("Auth", "Failed to clear credential state: ${e.message}")
                 } finally {
-                    Firebase.auth.signOut()
+                    try {
+                        getAuth()?.signOut()
+                    } catch (e: Throwable) {
+                        Log.e("Auth", "Failed to signOut", e)
+                    }
                     withContext(Dispatchers.Main) {
                         onSignOutComplete()
                     }

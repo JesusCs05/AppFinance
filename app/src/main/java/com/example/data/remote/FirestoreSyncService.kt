@@ -7,6 +7,7 @@ import com.example.data.model.AccountEntity
 import com.example.data.model.BankNotificationDraftEntity
 import com.example.data.model.TransactionEntity
 import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -15,18 +16,31 @@ import kotlinx.coroutines.tasks.await
 
 class FirestoreSyncService(private val context: Context) {
 
-    private val db: FirebaseFirestore by lazy {
-        val dbId = context.getString(R.string.firestore_database_id)
-        FirebaseFirestore.getInstance(dbId)
+    private val db: FirebaseFirestore? by lazy {
+        try {
+            val dbId = context.getString(R.string.firestore_database_id)
+            FirebaseFirestore.getInstance(dbId)
+        } catch (e: Throwable) {
+            Log.e("FirestoreSync", "Failed to initialize FirebaseFirestore instance", e)
+            null
+        }
     }
 
-    private val auth = Firebase.auth
+    private val auth: FirebaseAuth? by lazy {
+        try {
+            Firebase.auth
+        } catch (e: Throwable) {
+            Log.e("FirestoreSync", "Failed to access FirebaseAuth", e)
+            null
+        }
+    }
 
-    fun getCurrentUser() = auth.currentUser
+    fun getCurrentUser() = try { auth?.currentUser } catch (_: Throwable) { null }
 
     suspend fun syncUserToCloud() {
-        val user = auth.currentUser ?: return
-        val userDoc = db.collection("users").document(user.uid)
+        val firestore = db ?: return
+        val user = getCurrentUser() ?: return
+        val userDoc = firestore.collection("users").document(user.uid)
         val payload = mapOf(
             "userId" to user.uid,
             "email" to (user.email ?: ""),
@@ -42,8 +56,9 @@ class FirestoreSyncService(private val context: Context) {
     }
 
     suspend fun syncAccountsToCloud(accounts: List<AccountEntity>) {
-        val user = auth.currentUser ?: return
-        val userAccountsRef = db.collection("users").document(user.uid).collection("accounts")
+        val firestore = db ?: return
+        val user = getCurrentUser() ?: return
+        val userAccountsRef = firestore.collection("users").document(user.uid).collection("accounts")
         for (acc in accounts) {
             val payload = mapOf(
                 "userId" to user.uid,
@@ -64,8 +79,9 @@ class FirestoreSyncService(private val context: Context) {
     }
 
     suspend fun syncTransactionsToCloud(transactions: List<TransactionEntity>) {
-        val user = auth.currentUser ?: return
-        val userTxRef = db.collection("users").document(user.uid).collection("transactions")
+        val firestore = db ?: return
+        val user = getCurrentUser() ?: return
+        val userTxRef = firestore.collection("users").document(user.uid).collection("transactions")
         for (tx in transactions) {
             val payload = mapOf(
                 "userId" to user.uid,
@@ -90,8 +106,9 @@ class FirestoreSyncService(private val context: Context) {
     }
 
     suspend fun syncBankDraftsToCloud(drafts: List<BankNotificationDraftEntity>) {
-        val user = auth.currentUser ?: return
-        val draftsRef = db.collection("users").document(user.uid).collection("bank_drafts")
+        val firestore = db ?: return
+        val user = getCurrentUser() ?: return
+        val draftsRef = firestore.collection("users").document(user.uid).collection("bank_drafts")
         for (draft in drafts) {
             val payload = mapOf(
                 "userId" to user.uid,

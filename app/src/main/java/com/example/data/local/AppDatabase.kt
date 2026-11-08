@@ -48,7 +48,11 @@ abstract class AppDatabase : RoomDatabase() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
                         CoroutineScope(Dispatchers.IO).launch {
-                            INSTANCE?.let { seedDatabase(it) }
+                            try {
+                                INSTANCE?.let { seedDatabase(it) }
+                            } catch (e: Throwable) {
+                                android.util.Log.e("AppDatabase", "Error seeding database", e)
+                            }
                         }
                     }
                 })

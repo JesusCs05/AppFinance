@@ -29,10 +29,15 @@ import kotlinx.coroutines.withContext
 
 class AuthRepository(private val context: Context) {
 
-    private val auth: FirebaseAuth = Firebase.auth
+    private val auth: FirebaseAuth? = try {
+        Firebase.auth
+    } catch (e: Throwable) {
+        Log.e("AuthRepository", "Failed to access FirebaseAuth", e)
+        null
+    }
     private val credentialManager: CredentialManager = CredentialManager.create(context)
 
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth?.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
@@ -42,8 +47,12 @@ class AuthRepository(private val context: Context) {
     val authError: StateFlow<String?> = _authError.asStateFlow()
 
     init {
-        auth.addAuthStateListener { firebaseAuth ->
-            _currentUser.value = firebaseAuth.currentUser
+        try {
+            auth?.addAuthStateListener { firebaseAuth ->
+                _currentUser.value = firebaseAuth.currentUser
+            }
+        } catch (e: Throwable) {
+            Log.e("AuthRepository", "Error adding auth state listener", e)
         }
     }
 
@@ -57,12 +66,14 @@ class AuthRepository(private val context: Context) {
             "string",
             context.packageName
         )
-        return resourceId.takeIf { it != 0 }?.let(context::getString)
+        val resValue = resourceId.takeIf { it != 0 }?.let(context::getString)
+        return resValue ?: "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com"
     }
 
     fun attemptAutoSignIn(scope: CoroutineScope) {
-        if (auth.currentUser != null) {
-            _currentUser.value = auth.currentUser
+        val firebaseAuth = auth ?: return
+        if (firebaseAuth.currentUser != null) {
+            _currentUser.value = firebaseAuth.currentUser
             return
         }
 
@@ -88,7 +99,7 @@ class AuthRepository(private val context: Context) {
                 if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                    val authResult = auth.signInWithCredential(authCredential).await()
+                    val authResult = firebaseAuth.signInWithCredential(authCredential).await()
                     _currentUser.value = authResult.user
                     Log.d("Auth", "Auto sign-in successful: ${authResult.user?.displayName}")
                 }
@@ -104,12 +115,20 @@ class AuthRepository(private val context: Context) {
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
+        val firebaseAuth = auth
+        if (firebaseAuth == null) {
+            val err = "Servicio de autenticación no inicializado"
+            _authError.value = err
+            onError(err)
+            return
+        }
+
         _isLoading.value = true
         _authError.value = null
 
         val clientId = getGoogleClientId() ?: run {
             _isLoading.value = false
-            val err = "Configuración no disponible: falta default_web_client_id"
+            val err = "Configuración no disponible: falta client ID de Google"
             _authError.value = err
             onError(err)
             return
@@ -127,7 +146,7 @@ class AuthRepository(private val context: Context) {
                 if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                    val authResult = auth.signInWithCredential(authCredential).await()
+                    val authResult = firebaseAuth.signInWithCredential(authCredential).await()
                     _currentUser.value = authResult.user
                     _isLoading.value = false
                     Log.d("Auth", "Google sign-in successful: ${authResult.user?.email}")
@@ -159,7 +178,11 @@ class AuthRepository(private val context: Context) {
                 } catch (e: Exception) {
                     Log.w("Auth", "Error clearing credential state: ${e.message}")
                 } finally {
-                    auth.signOut()
+                    try {
+                        auth?.signOut()
+                    } catch (e: Throwable) {
+                        Log.e("Auth", "Error during auth signOut", e)
+                    }
                     _currentUser.value = null
                     onComplete()
                 }
