@@ -39,55 +39,7 @@ jobs:
           # Asegurar existencia de google-services.json
           if [ ! -f app/google-services.json ]; then
             echo "Restaurando app/google-services.json..."
-            cat << 'EOF' > app/google-services.json
-{
-  "project_info": {
-    "project_number": "686838452337",
-    "project_id": "gen-lang-client-0002612712",
-    "storage_bucket": "gen-lang-client-0002612712.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:686838452337:android:42d3fd8f573f54470bcbd0",
-        "android_client_info": {
-          "package_name": "com.aistudio.aetherpay.vxrkpm"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "686838452337-v2m3qeqod6l87npgvcpbk8jm463c76j7.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.aistudio.aetherpay.vxrkpm",
-            "certificate_hash": "0762c70b365773a3cc6c923e999671bae9ec8665"
-          }
-        },
-        {
-          "client_id": "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBgS1BD5lvVt1GCpHKj-t8eohNUXyqmwmM"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "686838452337-neevd4k4tccpiborbvi6g11dta53eg63.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
-EOF
+            echo "ewogICJwcm9qZWN0X2luZm8iOiB7CiAgICAicHJvamVjdF9udW1iZXIiOiAiNjg2ODM4NDUyMzM3IiwKICAgICJwcm9qZWN0X2lkIjogImdlbi1sYW5nLWNsaWVudC0wMDAyNjEyNzEyIiwKICAgICJzdG9yYWdlX2J1Y2tldCI6ICJnZW4tbGFuZy1jbGllbnQtMDAwMjYxMjcxMi5maXJlYmFzZXN0b3JhZ2UuYXBwIgogIH0sCiAgImNsaWVudCI6IFsKICAgIHsKICAgICAgImNsaWVudF9pbmZvIjogewogICAgICAgICJtb2JpbGVzZGtfYXBwX2lkIjogIjE6Njg2ODM4NDUyMzM3OmFuZHJvaWQ6NDJkM2ZkOGY1NzNmNTQ0NzBiY2JkMCIsCiAgICAgICAgImFuZHJvaWRfY2xpZW50X2luZm8iOiB7CiAgICAgICAgICAicGFja2FnZV9uYW1lIjogImNvbS5haXN0dWRpby5hZXRoZXJwYXkudnhya3BtIgogICAgICAgIH0KICAgICAgfSwKICAgICAgIm9hdXRoX2NsaWVudCI6IFsKICAgICAgICB7CiAgICAgICAgICAiY2xpZW50X2lkIjogIjY4NjgzODQ1MjMzNy12Mm0zcWVxb2Q2bDg3bnBndmNwYms4am00NjNjNzZqNy5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAiY2xpZW50X3R5cGUiOiAxLAogICAgICAgICAgImFuZHJvaWRfaW5mbyI6IHsKICAgICAgICAgICAgInBhY2thZ2VfbmFtZSI6ICJjb20uYWlzdHVkaW8uYWV0aGVycGF5LnZ4cmtwbSIsCiAgICAgICAgICAgICJjZXJ0aWZpY2F0ZV9oYXNoIjogIjA3NjJjNzBiMzY1NzczYTNjYzZjOTIzZTk5OTY3MWJhZTllYzg2NjUiCiAgICAgICAgICB9CiAgICAgICAgfSwKICAgICAgICB7CiAgICAgICAgICAiY2xpZW50X2lkIjogIjY4NjgzODQ1MjMzNy1uZWV2ZDRrNHRjY3BpYm9yYnZpNmcxMWR0YTUzZWc2My5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAiY2xpZW50X3R5cGUiOiAzCiAgICAgICAgfQogICAgICBdLAogICAgICAiYXBpX2tleSI6IFsKICAgICAgICB7CiAgICAgICAgICAiY3VycmVudF9rZXkiOiAiQUl6YVN5QmdTMUJENWx2VnQxR0NwSEtqLXQ4ZW9oTlVYeXFtd21NIgogICAgICAgIH0KICAgICAgXSwKICAgICAgInNlcnZpY2VzIjogewogICAgICAgICJhcHBpbnZpdGVfc2VydmljZSI6IHsKICAgICAgICAgICJvdGhlcl9wbGF0Zm9ybV9vYXV0aF9jbGllbnQiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiY2xpZW50X2lkIjogIjY4NjgzODQ1MjMzNy1uZWV2ZDRrNHRjY3BpYm9yYnZpNmcxMWR0YTUzZWc2My5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAgICAgImNsaWVudF90eXBlIjogMwogICAgICAgICAgICB9CiAgICAgICAgICBdCiAgICAgICAgfQogICAgICB9CiAgICB9CiAgXSwKICAiY29uZmlndXJhdGlvbl92ZXJzaW9uIjogIjEiCn0=" | base64 -d > app/google-services.json
           fi
 
           # Generar keystore de depuración requerido por build.gradle.kts
