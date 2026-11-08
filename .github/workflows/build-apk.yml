@@ -23,13 +23,15 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Generar Wrapper compatible (Gradle 9.3.1)
+      - name: Generar Wrapper compatible
         run: |
           gradle wrapper --gradle-version 9.3.1 --distribution-type bin
           chmod +x gradlew
 
-      - name: Compilar APK Debug
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Compilar APK Debug con pantalla virtual
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          xvfb-run --auto-servernum ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Subir APK generado
         if: success()
@@ -37,3 +39,4 @@ jobs:
         with:
           name: MiApp-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
+
