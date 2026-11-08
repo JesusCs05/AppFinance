@@ -19,22 +19,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Preparar Gradle Wrapper
+      - name: Generar Wrapper compatible (Gradle 8.9)
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-          else
-            gradle wrapper
-            chmod +x gradlew
-          fi
+          gradle wrapper --gradle-version 8.9 --distribution-type bin
+          chmod +x gradlew
 
       - name: Compilar APK Debug
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Subir APK generado
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MiApp-Debug-APK
