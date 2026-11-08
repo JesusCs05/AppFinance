@@ -23,9 +23,9 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Generar Wrapper compatible (Gradle 8.9)
+      - name: Generar Wrapper compatible (Gradle 9.3.1)
         run: |
-          gradle wrapper --gradle-version 8.9 --distribution-type bin
+          gradle wrapper --gradle-version 9.3.1 --distribution-type bin
           chmod +x gradlew
 
       - name: Compilar APK Debug
