@@ -26,11 +26,11 @@ jobs:
 
       - name: Aceptar licencias del SDK
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
 
       - name: Preparar variables de entorno y keystore
         run: |
-          # Asegurar existencia de archivo .env
+          # Asegurar existencia de archivo .env a partir de .env.example
           if [ -f .env.example ] && [ ! -f .env ]; then
             cp .env.example .env
           fi
@@ -51,10 +51,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Dar permisos de ejecucion a gradlew
-        run: chmod +x gradlew
+        run: chmod +x gradlew || true
 
       - name: Compilar APK (assembleDebug)
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          if command -v gradle &> /dev/null; then
+            gradle assembleDebug --no-daemon --stacktrace
+          else
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          fi
 
       - name: Subir APK como artefacto descargable
         if: success()
