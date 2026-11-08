@@ -10,12 +10,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +29,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -79,6 +86,7 @@ import com.example.ui.theme.RubyExpense
 import com.example.ui.theme.VioletAccent
 import com.example.ui.viewmodel.FinanceViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiCopilotScreen(
     viewModel: FinanceViewModel,
@@ -89,6 +97,7 @@ fun AiCopilotScreen(
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val isImeVisible = WindowInsets.isImeVisible
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -104,7 +113,7 @@ fun AiCopilotScreen(
         }
     }
 
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages.size, isImeVisible) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -114,6 +123,7 @@ fun AiCopilotScreen(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
+            .imePadding()
             .padding(horizontal = 16.dp)
     ) {
         // Top Header
@@ -244,7 +254,10 @@ fun AiCopilotScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 90.dp),
+                .padding(
+                    top = 8.dp,
+                    bottom = if (isImeVisible) 12.dp else 90.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
@@ -264,6 +277,15 @@ fun AiCopilotScreen(
                     unfocusedBorderColor = CharcoalBorder,
                     focusedTextColor = MetallicSilverLight,
                     unfocusedTextColor = MetallicSilverLight
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (inputText.isNotBlank()) {
+                            viewModel.sendCopilotMessage(inputText)
+                            inputText = ""
+                        }
+                    }
                 ),
                 maxLines = 3
             )

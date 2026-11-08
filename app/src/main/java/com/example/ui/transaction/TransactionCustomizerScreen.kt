@@ -21,13 +21,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -206,14 +212,16 @@ fun TransactionCustomizerScreen(
             }
         }
 
-        // Amount Display & Keypad Input Box
+        // Amount Display & Device Keyboard Input Box
         item {
             AetherCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
                 ) {
                     Text(
                         text = "MONTO EN MXN",
@@ -222,33 +230,72 @@ fun TransactionCustomizerScreen(
                         letterSpacing = 1.2.sp
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    val displayAmount = if (rawAmountString.isEmpty()) "0.00" else rawAmountString
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(CharcoalDark)
+                            .border(1.dp, CharcoalBorder, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            text = "$",
+                            fontFamily = JetBrainsMono,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 34.sp,
+                            color = if (selectedType == "income") EmeraldIncome else RubyExpense,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+
+                        BasicTextField(
+                            value = rawAmountString,
+                            onValueChange = { input ->
+                                val filtered = input.filter { it.isDigit() || it == '.' }
+                                if (filtered.count { it == '.' } <= 1 && filtered.length <= 10) {
+                                    rawAmountString = filtered
+                                }
+                            },
+                            textStyle = TextStyle(
+                                fontFamily = JetBrainsMono,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 34.sp,
+                                color = if (selectedType == "income") EmeraldIncome else RubyExpense,
+                                textAlign = TextAlign.Start
+                            ),
+                            cursorBrush = SolidColor(if (selectedType == "income") EmeraldIncome else RubyExpense),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                Box {
+                                    if (rawAmountString.isEmpty()) {
+                                        Text(
+                                            text = "0.00",
+                                            fontFamily = JetBrainsMono,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 34.sp,
+                                            color = MetallicSilverMuted.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                            modifier = Modifier.testTag("transaction_amount_input")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "$ $displayAmount",
-                        fontFamily = JetBrainsMono,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 36.sp,
-                        color = if (selectedType == "income") EmeraldIncome else RubyExpense
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Embedded Tabular Numeric Pad per frontend spec
-                    AetherNumPad(
-                        onNumberClick = { digit ->
-                            if (digit == "." && rawAmountString.contains(".")) return@AetherNumPad
-                            if (rawAmountString.length < 9) {
-                                rawAmountString += digit
-                            }
-                        },
-                        onBackspaceClick = {
-                            if (rawAmountString.isNotEmpty()) {
-                                rawAmountString = rawAmountString.dropLast(1)
-                            }
-                        },
-                        onClearClick = { rawAmountString = "" }
+                        text = "Toca los números para editar con el teclado numérico de tu dispositivo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MetallicSilverMuted,
+                        fontSize = 11.sp
                     )
                 }
             }
@@ -503,63 +550,3 @@ fun TransactionCustomizerScreen(
     }
 }
 
-@Composable
-private fun AetherNumPad(
-    onNumberClick: (String) -> Unit,
-    onBackspaceClick: () -> Unit,
-    onClearClick: () -> Unit
-) {
-    val padRows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf(".", "0", "DEL")
-    )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        padRows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                row.forEach { key ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CharcoalDark)
-                            .border(1.dp, CharcoalBorder, RoundedCornerShape(12.dp))
-                            .clickable {
-                                when (key) {
-                                    "DEL" -> onBackspaceClick()
-                                    else -> onNumberClick(key)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (key == "DEL") {
-                            Icon(
-                                imageVector = Icons.Default.Backspace,
-                                contentDescription = "Borrar",
-                                tint = MetallicSilverMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        } else {
-                            Text(
-                                text = key,
-                                fontFamily = JetBrainsMono,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MetallicSilverLight
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}

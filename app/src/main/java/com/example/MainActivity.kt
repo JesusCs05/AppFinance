@@ -10,9 +10,11 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -102,6 +104,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AetherPayApp(viewModel: FinanceViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
@@ -119,7 +122,8 @@ fun AetherPayApp(viewModel: FinanceViewModel) {
         containerColor = DarkBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (currentScreen != AppScreen.CUSTOMIZE_TRANSACTION) {
+            val isImeVisible = WindowInsets.isImeVisible
+            if (currentScreen != AppScreen.CUSTOMIZE_TRANSACTION && (!isImeVisible || currentScreen != AppScreen.COPILOT)) {
                 AetherBottomNav(
                     currentScreen = currentScreen,
                     pendingDraftsCount = pendingDrafts.size,
