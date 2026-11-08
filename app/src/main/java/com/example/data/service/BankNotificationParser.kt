@@ -12,6 +12,7 @@ object BankNotificationParser {
     const val PKG_BANORTE = "mx.banorte"
     const val PKG_NU = "com.nu.production"
     const val PKG_SANTANDER = "com.santander.mx"
+    const val PKG_BANAMEX = "com.citibanamex.movil"
 
     data class ParsedBankResult(
         val bankPackage: String,
@@ -29,7 +30,9 @@ object BankNotificationParser {
         return packageName.contains("bbva", ignoreCase = true) ||
                 packageName.contains("banorte", ignoreCase = true) ||
                 packageName.contains("nu", ignoreCase = true) ||
-                packageName.contains("santander", ignoreCase = true)
+                packageName.contains("santander", ignoreCase = true) ||
+                packageName.contains("banamex", ignoreCase = true) ||
+                packageName.contains("citibanamex", ignoreCase = true)
     }
 
     fun parseNotification(packageName: String, title: String, text: String, timestamp: Long): ParsedBankResult? {
@@ -68,6 +71,7 @@ object BankNotificationParser {
             lower.contains("banorte") -> PKG_BANORTE to "Banorte Móvil"
             lower.contains("nu") || lower.contains("nubank") -> PKG_NU to "Nu Tarjeta"
             lower.contains("santander") -> PKG_SANTANDER to "Santander México"
+            lower.contains("banamex") || lower.contains("citibanamex") -> PKG_BANAMEX to "Citibanamex Móvil"
             else -> "com.general.bank" to "Banco Notificación"
         }
     }
@@ -90,41 +94,50 @@ object BankNotificationParser {
 
     private fun extractType(content: String): String {
         val lower = content.lowercase(Locale.ROOT)
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
         return when {
             lower.contains("deposito") || lower.contains("abono") || lower.contains("recibiste") ||
-            lower.contains("transferencia recibida") || lower.contains("nomina") -> "income"
+            lower.contains("transferencia recibida") || lower.contains("nomina") ||
+            lower.contains("ingreso") -> "income"
             else -> "expense"
         }
     }
 
     private fun extractMerchant(content: String, bankName: String): String {
+        val lower = content.lowercase(Locale.ROOT)
+        // Check canonical merchants first
+        when {
+            lower.contains("walmart") -> return "Walmart Supercenter"
+            lower.contains("oxxo") -> return "OXXO Tiendas"
+            lower.contains("uber") -> return "Uber Technologies"
+            lower.contains("amazon") -> return "Amazon México"
+            lower.contains("liverpool") -> return "Liverpool"
+            lower.contains("starbucks") -> return "Starbucks Coffee"
+            lower.contains("netflix") -> return "Netflix"
+            lower.contains("spotify") -> return "Spotify"
+            lower.contains("costco") -> return "Costco Wholesale"
+            lower.contains("cfe") -> return "CFE Electricidad"
+            lower.contains("farmacia") -> return "Farmacias del Ahorro"
+            lower.contains("cajero") || lower.contains("retiro") -> return "Retiro ATM"
+        }
+
         // Patterns like "en OXXO", "en WALMART", "compra en LIVERPOOL", "en AMAZON con tarjeta"
         val regexEn = Regex("""(?:en|de|para|comercio:?)\s+([A-Za-z0-9\s\.\-_&]{3,28}?)(?=\s+(?:con|el|por|al|tarjeta|desde|\.|\$|\*|$))""", RegexOption.IGNORE_CASE)
         val match = regexEn.find(content)
         if (match != null) {
             val candidate = match.groupValues[1].trim()
             if (candidate.length in 3..25 && !candidate.equals(bankName, ignoreCase = true)) {
-                return candidate.replaceFirstChar { it.uppercase() }
+                return candidate.split(" ").joinToString(" ") { word ->
+                    word.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }
+                }
             }
         }
 
-        // Fallbacks based on common merchants
-        val lower = content.lowercase(Locale.ROOT)
-        return when {
-            lower.contains("walmart") -> "Walmart Supercenter"
-            lower.contains("oxxo") -> "OXXO Tiendas"
-            lower.contains("uber") -> "Uber Technologies"
-            lower.contains("amazon") -> "Amazon México"
-            lower.contains("liverpool") -> "Liverpool"
-            lower.contains("starbucks") -> "Starbucks Coffee"
-            lower.contains("netflix") -> "Netflix"
-            lower.contains("spotify") -> "Spotify"
-            lower.contains("costco") -> "Costco Wholesale"
-            lower.contains("cfe") -> "CFE Electricidad"
-            lower.contains("farmacia") -> "Farmacias del Ahorro"
-            lower.contains("cajero") || lower.contains("retiro") -> "Retiro ATM"
-            else -> "Comercio Detectado"
-        }
+        return "Comercio Detectado"
     }
 
     private fun extractLastFour(content: String): String {

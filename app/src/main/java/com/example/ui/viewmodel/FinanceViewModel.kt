@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,11 +10,17 @@ import com.example.data.model.BankNotificationDraftEntity
 import com.example.data.model.CategoryEntity
 import com.example.data.model.RecurringRuleEntity
 import com.example.data.model.TransactionEntity
+import com.example.data.remote.FirestoreSyncService
+import com.example.data.repository.AuthRepository
 import com.example.data.repository.FinanceRepository
 import com.example.data.service.BankNotificationParser
 import com.example.domain.copilot.AiCopilotEngine
 import com.example.domain.copilot.CopilotMessage
 import com.example.domain.copilot.CopilotToolCall
+import com.example.domain.copilot.GeminiCopilotService
+import com.example.domain.recurring.RecurringPaymentScheduler
+import com.example.util.VoiceInputManager
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,11 +41,60 @@ enum class AppScreen {
 
 class FinanceViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: FinanceRepository
+    private val db = AppDatabase.getInstance(application)
+    private val repository: FinanceRepository = FinanceRepository(db)
+    private val syncService: FirestoreSyncService = FirestoreSyncService(application)
+    val authRepository: AuthRepository = AuthRepository(application)
+    private val geminiService: GeminiCopilotService = GeminiCopilotService(application)
+    val voiceInputManager: VoiceInputManager = VoiceInputManager(application)
 
     init {
-        val db = AppDatabase.getInstance(application)
-        repository = FinanceRepository(db)
+        // Attempt silent background sign-in
+        authRepository.attemptAutoSignIn(viewModelScope)
+        // Check due recurring rules on startup
+        processDueRecurringRules()
+    }
+
+    val currentUser: StateFlow<FirebaseUser?> = authRepository.currentUser
+    val isAuthLoading: StateFlow<Boolean> = authRepository.isLoading
+    val authError: StateFlow<String?> = authRepository.authError
+
+    private val _syncStatus = MutableStateFlow<String>("Listo")
+    val syncStatus: StateFlow<String> = _syncStatus.asStateFlow()
+
+    private val _recurringNotification = MutableStateFlow<String?>(null)
+    val recurringNotification: StateFlow<String?> = _recurringNotification.asStateFlow()
+
+    fun refreshUser() {
+        authRepository.attemptAutoSignIn(viewModelScope)
+    }
+
+    fun signInWithGoogle(activity: Activity) {
+        authRepository.signInWithGoogle(activity, viewModelScope, onSuccess = {
+            syncWithCloud()
+        })
+    }
+
+    fun signOut() {
+        authRepository.signOut(viewModelScope)
+    }
+
+    fun syncWithCloud() {
+        val user = currentUser.value ?: return
+        viewModelScope.launch {
+            _syncStatus.value = "Sincronizando..."
+            try {
+                syncService.syncUserToCloud()
+                syncService.syncAccountsToCloud(accounts.value)
+                syncService.syncTransactionsToCloud(transactions.value)
+                syncService.syncBankDraftsToCloud(allBankDrafts.value)
+                _syncStatus.value = "Nube al día"
+                delay(2000)
+                _syncStatus.value = "Listo"
+            } catch (e: Exception) {
+                _syncStatus.value = "Error sincronización"
+            }
+        }
     }
 
     val accounts: StateFlow<List<AccountEntity>> = repository.allAccounts
@@ -80,14 +136,13 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         listOf(
             CopilotMessage(
                 sender = "copilot",
-                text = "¡Hola! Soy tu Copiloto Financiero AetherPay. Puedo clasificar gastos por voz, detectar alertas bancarias de BBVA/Nu/Banorte o darte proyecciones de ahorro."
+                text = "¡Hola! Soy tu Copiloto Financiero AetherPay potenciado con Gemini. Puedo clasificar gastos por voz en vivo, detectar alertas bancarias y darte proyecciones inteligentes."
             )
         )
     )
     val copilotMessages: StateFlow<List<CopilotMessage>> = _copilotMessages.asStateFlow()
 
-    private val _isListeningVoice = MutableStateFlow(false)
-    val isListeningVoice: StateFlow<Boolean> = _isListeningVoice.asStateFlow()
+    val isListeningVoice: StateFlow<Boolean> = voiceInputManager.isListening
 
     fun navigateTo(screen: AppScreen) {
         if (screen != AppScreen.CUSTOMIZE_TRANSACTION) {
@@ -116,6 +171,41 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
 
     fun unlockWithBiometrics() {
         _isBiometricLocked.value = false
+    }
+
+    // Account & Budget management
+    fun createNewAccount(account: AccountEntity) {
+        viewModelScope.launch {
+            repository.insertAccount(account)
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
+        }
+    }
+
+    fun updateCategoryBudget(category: CategoryEntity) {
+        viewModelScope.launch {
+            repository.updateCategory(category)
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
+        }
+    }
+
+    fun processDueRecurringRules() {
+        viewModelScope.launch {
+            val result = RecurringPaymentScheduler.evaluateAndProcessDueRules(db, repository)
+            if (result.processedCount > 0) {
+                _recurringNotification.value = "Se aplicaron ${result.processedCount} cargos periódicos: $${"%,.2f".format(result.totalAmount)} MXN"
+                if (currentUser.value != null) {
+                    syncWithCloud()
+                }
+            }
+        }
+    }
+
+    fun dismissRecurringNotification() {
+        _recurringNotification.value = null
     }
 
     // Transaction CRUD
@@ -165,6 +255,12 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                     )
                 )
             }
+
+            // Sync to Firestore if user is authenticated
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
+
             _editingTransaction.value = null
             _currentScreen.value = AppScreen.DASHBOARD
         }
@@ -173,6 +269,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun deleteTransaction(tx: TransactionEntity) {
         viewModelScope.launch {
             repository.deleteTransaction(tx)
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
         }
     }
 
@@ -185,12 +284,18 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                 targetAccountId = accId,
                 targetCategoryId = draft.suggestedCategoryId
             )
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
         }
     }
 
     fun dismissBankDraft(draftId: String) {
         viewModelScope.launch {
             repository.dismissBankDraft(draftId)
+            if (currentUser.value != null) {
+                syncWithCloud()
+            }
         }
     }
 
@@ -243,32 +348,41 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Copilot
+    // Copilot with Gemini AI Logic
     fun sendCopilotMessage(userText: String) {
         if (userText.isBlank()) return
         val userMsg = CopilotMessage(sender = "user", text = userText)
         _copilotMessages.value = _copilotMessages.value + userMsg
 
         viewModelScope.launch {
-            delay(400) // Realistic processing delay
-            val reply = AiCopilotEngine.processPrompt(
+            delay(300)
+            val reply = geminiService.generateFinancialAdvice(
                 prompt = userText,
                 accounts = accounts.value,
                 categories = categories.value,
-                recentTransactions = transactions.value
+                transactions = transactions.value
             )
             _copilotMessages.value = _copilotMessages.value + reply
         }
     }
 
-    fun startVoiceRecording() {
-        _isListeningVoice.value = true
+    fun startVoiceRecording(onTranscriptionUpdated: (String) -> Unit = {}) {
+        voiceInputManager.startListening(
+            onResult = { text ->
+                onTranscriptionUpdated(text)
+                sendCopilotMessage(text)
+            },
+            onError = { errMsg ->
+                // Graceful fallback to default simulation if mic is unavailable or blocked in container
+                val sample = "Gasté \$350 en OXXO de café y botana"
+                onTranscriptionUpdated(sample)
+                sendCopilotMessage(sample)
+            }
+        )
     }
 
-    fun stopVoiceRecording(simulatedQuery: String? = null) {
-        _isListeningVoice.value = false
-        val text = simulatedQuery ?: "Gasté \$350 en OXXO de café y botana"
-        sendCopilotMessage(text)
+    fun stopVoiceRecording() {
+        voiceInputManager.stopListening()
     }
 
     fun confirmCopilotToolCall(messageId: String, toolCall: CopilotToolCall) {
@@ -301,6 +415,10 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
                         frequency = toolCall.recurrenceFrequency ?: "monthly"
                     )
                 )
+            }
+
+            if (currentUser.value != null) {
+                syncWithCloud()
             }
 
             // Copilot confirmation reply

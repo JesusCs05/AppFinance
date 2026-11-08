@@ -1,11 +1,17 @@
 package com.example.ui.notifications
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,10 +28,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -34,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,20 +52,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.BankNotificationDraftEntity
-import com.example.ui.components.AetherButton
 import com.example.ui.components.AetherCard
 import com.example.ui.components.CurrencyText
 import com.example.ui.theme.AmberAlert
 import com.example.ui.theme.CharcoalBorder
 import com.example.ui.theme.CharcoalDark
+import com.example.ui.theme.CharcoalSlate
 import com.example.ui.theme.DarkBackground
-import com.example.ui.theme.DarkSurfaceElevated
 import com.example.ui.theme.EmeraldIncome
 import com.example.ui.theme.JetBrainsMono
 import com.example.ui.theme.MetallicSilverLight
@@ -70,13 +84,35 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BankNotificationInboxScreen(
     viewModel: FinanceViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val allDrafts by viewModel.allBankDrafts.collectAsStateWithLifecycle()
     var selectedFilter by remember { mutableStateOf("pending") } // "pending", "confirmed", "all"
+
+    // Real-time notification listener permission check
+    var isListenerEnabled by remember {
+        mutableStateOf(isNotificationServiceEnabled(context))
+    }
+
+    // Refresh permission state whenever returning to this screen/app
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isListenerEnabled = isNotificationServiceEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val displayedDrafts = when (selectedFilter) {
         "pending" -> allDrafts.filter { it.status == "pending" }
@@ -99,7 +135,8 @@ fun BankNotificationInboxScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { viewModel.navigateTo(AppScreen.DASHBOARD) }
+                    onClick = { viewModel.navigateTo(AppScreen.DASHBOARD) },
+                    modifier = Modifier.testTag("back_from_notifications_button")
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -108,7 +145,7 @@ fun BankNotificationInboxScreen(
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Buzón de Notificaciones Bancarias",
                         style = MaterialTheme.typography.titleMedium,
@@ -116,44 +153,129 @@ fun BankNotificationInboxScreen(
                         color = MetallicSilverLight
                     )
                     Text(
-                        text = "Listener & Deduplicación SHA-256",
+                        text = "Captura en Tiempo Real & Deduplicación SHA-256",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AmberAlert
+                        color = if (isListenerEnabled) EmeraldIncome else AmberAlert
+                    )
+                }
+
+                IconButton(
+                    onClick = { isListenerEnabled = isNotificationServiceEnabled(context) }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Actualizar estado",
+                        tint = MetallicSilverMuted,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
 
-        // Test Simulation Bar
+        // Real Listener System Status Card
         item {
-            AetherCard(modifier = Modifier.fillMaxWidth()) {
+            AetherCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderColor = if (isListenerEnabled) EmeraldIncome.copy(alpha = 0.4f) else AmberAlert.copy(alpha = 0.5f)
+            ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Sensors, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Simulador de Push Bancario",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MetallicSilverLight
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Genera un payload simulando la llegada de una notificación del banco:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MetallicSilverMuted
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        SimulateButton("BBVA", Color(0xFF004481)) { viewModel.simulateBankNotification("bbva") }
-                        SimulateButton("Nu", Color(0xFF820AD1)) { viewModel.simulateBankNotification("nu") }
-                        SimulateButton("Banorte", Color(0xFFB91C1C)) { viewModel.simulateBankNotification("banorte") }
-                        SimulateButton("Santander", Color(0xFFDC2626)) { viewModel.simulateBankNotification("santander") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isListenerEnabled) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = if (isListenerEnabled) EmeraldIncome else AmberAlert,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isListenerEnabled) "Captura en Vivo Activa" else "Acceso a Notificaciones Requerido",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MetallicSilverLight
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isListenerEnabled) EmeraldIncome.copy(alpha = 0.15f) else AmberAlert.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (isListenerEnabled) "EN SERVICIO" else "INACTIVO",
+                                fontFamily = JetBrainsMono,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isListenerEnabled) EmeraldIncome else AmberAlert
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isListenerEnabled) {
+                            "AetherPay escucha pasivamente en segundo plano los pagos de tus bancos. Al recibir una alerta bancaria, se parseará y agregará como borrador pendiente aquí sin necesidad de simulación."
+                        } else {
+                            "Para capturar automáticamente transacciones reales de tus bancos, debes permitir el acceso de lectura de notificaciones en los Ajustes del Sistema Android."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MetallicSilverMuted,
+                        lineHeight = 18.sp
+                    )
+
+                    if (!isListenerEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                openNotificationSettings(context)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(42.dp)
+                                .testTag("enable_notification_access_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight)
+                        ) {
+                            Icon(imageVector = Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Activar en Ajustes de Android",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Monitored Banks Information Bar
+        item {
+            Column {
+                Text(
+                    text = "Bancos Monitoreados Activamente",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MetallicSilverMuted,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BankMonitorBadge("BBVA México", Color(0xFF004481))
+                    BankMonitorBadge("Nu Tarjeta", Color(0xFF820AD1))
+                    BankMonitorBadge("Banorte Móvil", Color(0xFFB91C1C))
+                    BankMonitorBadge("Santander", Color(0xFFDC2626))
+                    BankMonitorBadge("Citibanamex", Color(0xFF002D72))
                 }
             }
         }
@@ -192,14 +314,28 @@ fun BankNotificationInboxScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 32.dp),
+                        .padding(vertical = 40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No hay notificaciones en este filtro",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MetallicSilverMuted
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = CharcoalSlate,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = if (isListenerEnabled) {
+                                "Sin notificaciones bancarias pendientes\nLas compras reales aparecerán automáticamente."
+                            } else {
+                                "Activa el acceso a notificaciones arriba para comenzar a capturar gastos en vivo."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MetallicSilverMuted,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
         } else {
@@ -215,19 +351,25 @@ fun BankNotificationInboxScreen(
 }
 
 @Composable
-private fun SimulateButton(name: String, color: Color, onClick: () -> Unit) {
-    Box(
+private fun BankMonitorBadge(name: String, brandColor: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(CharcoalDark)
-            .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .border(1.dp, brandColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 5.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(EmeraldIncome)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = "+ $name",
-            fontFamily = JetBrainsMono,
-            fontSize = 11.sp,
+            text = name,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MetallicSilverLight
         )
@@ -260,7 +402,6 @@ private fun BankDraftCard(
 ) {
     val dateFormat = remember { SimpleDateFormat("dd MMM, hh:mm a", Locale("es", "MX")) }
     val isPending = draft.status == "pending"
-    val isConfirmed = draft.status == "confirmed"
 
     val statusColor = when (draft.status) {
         "pending" -> AmberAlert
@@ -325,7 +466,7 @@ private fun BankDraftCard(
                         color = MetallicSilverLight
                     )
                     Text(
-                        text = "Tarjeta terminación *${draft.accountLastFour}",
+                        text = "Tarjeta terminación *${draft.accountLastFour} • ${dateFormat.format(Date(draft.occurredAt))}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MetallicSilverMuted
                     )
@@ -340,7 +481,7 @@ private fun BankDraftCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Raw message box
+            // Raw notification payload
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -400,5 +541,26 @@ private fun BankDraftCard(
                 }
             }
         }
+    }
+}
+
+private fun isNotificationServiceEnabled(context: Context): Boolean {
+    return try {
+        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+    } catch (e: Exception) {
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        flat != null && flat.contains(context.packageName)
+    }
+}
+
+private fun openNotificationSettings(context: Context) {
+    try {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        val intent = Intent(Settings.ACTION_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
     }
 }

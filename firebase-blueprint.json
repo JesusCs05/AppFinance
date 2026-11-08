@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AetherPay Firebase Schema",
+  "description": "Firestore database schema for AetherPay multi-user personal finance synchronization",
+  "entities": {
+    "account": {
+      "collection": "users/{userId}/accounts",
+      "fields": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["cash", "debit", "credit", "investment"] },
+        "lastFourDigits": { "type": "string", "maxLength": 10 },
+        "balance": { "type": "number" },
+        "colorHex": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["userId", "name", "type", "balance"]
+    },
+    "category": {
+      "collection": "users/{userId}/categories",
+      "fields": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "kind": { "type": "string", "enum": ["income", "expense"] },
+        "icon": { "type": "string", "maxLength": 50 },
+        "colorHex": { "type": "string", "maxLength": 20 },
+        "monthlyLimit": { "type": "number" }
+      },
+      "required": ["userId", "name", "kind"]
+    },
+    "transaction": {
+      "collection": "users/{userId}/transactions",
+      "fields": {
+        "userId": { "type": "string" },
+        "accountId": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "type": { "type": "string", "enum": ["income", "expense", "transfer"] },
+        "amount": { "type": "number", "minimum": 0 },
+        "occurredAt": { "type": "number" },
+        "merchant": { "type": "string", "maxLength": 150 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "source": { "type": "string" },
+        "idempotencyKey": { "type": "string" }
+      },
+      "required": ["userId", "accountId", "categoryId", "type", "amount", "merchant"]
+    }
+  }
+}

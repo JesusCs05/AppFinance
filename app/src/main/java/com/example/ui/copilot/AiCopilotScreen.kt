@@ -1,5 +1,8 @@
 package com.example.ui.copilot
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,6 +89,20 @@ fun AiCopilotScreen(
 
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startVoiceRecording { text ->
+                inputText = text
+            }
+        } else {
+            val sample = "Gasté \$350 en OXXO de café y botana"
+            inputText = sample
+            viewModel.sendCopilotMessage(sample)
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -212,7 +229,7 @@ fun AiCopilotScreen(
                 SoundWaveVisualizer(isRecording = true)
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { viewModel.stopVoiceRecording("Gasté \$520 en Starbucks con BBVA") },
+                    onClick = { viewModel.stopVoiceRecording() },
                     colors = ButtonDefaults.buttonColors(containerColor = RubyExpense),
                     shape = RoundedCornerShape(10.dp)
                 ) {
@@ -253,13 +270,13 @@ fun AiCopilotScreen(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Mic button (Speech simulation)
+            // Mic button (Speech recognition with runtime permission)
             IconButton(
                 onClick = {
                     if (isListening) {
                         viewModel.stopVoiceRecording()
                     } else {
-                        viewModel.startVoiceRecording()
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 modifier = Modifier

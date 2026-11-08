@@ -98,6 +98,9 @@ class FinanceRepository(private val database: AppDatabase) {
     suspend fun insertAccount(account: AccountEntity) = accountDao.insertAccount(account)
     suspend fun updateAccount(account: AccountEntity) = accountDao.updateAccount(account)
 
+    // Category mutations
+    suspend fun updateCategory(category: CategoryEntity) = categoryDao.insertCategory(category)
+
     // Recurring rules
     suspend fun insertRecurringRule(rule: RecurringRuleEntity) = recurringRuleDao.insertRecurringRule(rule)
     suspend fun deleteRecurringRule(rule: RecurringRuleEntity) = recurringRuleDao.deleteRecurringRule(rule)

@@ -40,11 +40,22 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import android.app.Activity
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.credentials.CredentialManager
+import com.example.ui.auth.GoogleAuthHelper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,10 +112,36 @@ fun DashboardScreen(
     val pendingDrafts by viewModel.pendingBankDrafts.collectAsStateWithLifecycle()
     val isPrivacyMode by viewModel.isPrivacyMode.collectAsStateWithLifecycle()
     val isBiometricProtected by viewModel.isBiometricProtected.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
 
     val totalNetWorth = accounts.sumOf { it.balance }
     val totalIncome = transactions.filter { it.type == "income" }.sumOf { it.amount }
     val totalExpense = transactions.filter { it.type == "expense" }.sumOf { it.amount }
+    val recurringNotice by viewModel.recurringNotification.collectAsStateWithLifecycle()
+
+    var showNewAccountDialog by remember { mutableStateOf(false) }
+    var showBudgetDialog by remember { mutableStateOf(false) }
+
+    if (showNewAccountDialog) {
+        com.example.ui.dialogs.NewAccountDialog(
+            onDismiss = { showNewAccountDialog = false },
+            onSave = { acc ->
+                viewModel.createNewAccount(acc)
+                showNewAccountDialog = false
+            }
+        )
+    }
+
+    if (showBudgetDialog) {
+        com.example.ui.dialogs.CategoryBudgetEditorDialog(
+            categories = categories,
+            onDismiss = { showBudgetDialog = false },
+            onSaveCategory = { cat ->
+                viewModel.updateCategoryBudget(cat)
+            }
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -185,6 +222,16 @@ fun DashboardScreen(
             }
         }
 
+        // Firebase Cloud Sync Card
+        item {
+            FirebaseCloudSyncCard(
+                currentUser = currentUser,
+                syncStatus = syncStatus,
+                onSyncNow = { viewModel.syncWithCloud() },
+                onRefreshUser = { viewModel.refreshUser() }
+            )
+        }
+
         // Hero Balance Card
         item {
             HeroBalanceCard(
@@ -209,12 +256,40 @@ fun DashboardScreen(
             }
         }
 
-        // Quick Bank Simulation & Action Trigger Bar
+        // Live Bank Notification Listener Card
         item {
-            BankSimulationTriggerRow(
-                onSimulateBank = { bank -> viewModel.simulateBankNotification(bank) },
+            BankLiveListenerBanner(
                 onOpenInbox = { viewModel.navigateTo(AppScreen.NOTIFICATION_INBOX) }
             )
+        }
+
+        // Recurring Payments Applied Banner (if any)
+        if (recurringNotice != null) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(VioletAccent.copy(alpha = 0.2f))
+                        .border(1.dp, VioletAccent.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(imageVector = Icons.Default.Repeat, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = recurringNotice!!, style = MaterialTheme.typography.bodySmall, color = MetallicSilverLight)
+                        }
+                        IconButton(onClick = { viewModel.dismissRecurringNotification() }, modifier = Modifier.size(24.dp)) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = MetallicSilverMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
         }
 
         // Accounts Carousel
@@ -231,11 +306,24 @@ fun DashboardScreen(
                         fontWeight = FontWeight.SemiBold,
                         color = MetallicSilverLight
                     )
-                    Text(
-                        text = "${accounts.size} activas",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MetallicSilverMuted
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "+ Cuenta",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = RoyalIndigoLight,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { showNewAccountDialog = true }
+                                .padding(end = 12.dp)
+                        )
+                        Text(
+                            text = "Presupuestos",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VioletAccent,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { showBudgetDialog = true }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
@@ -608,8 +696,7 @@ private fun PendingBankBanner(
 }
 
 @Composable
-private fun BankSimulationTriggerRow(
-    onSimulateBank: (String) -> Unit,
+private fun BankLiveListenerBanner(
     onOpenInbox: () -> Unit
 ) {
     AetherCard(
@@ -622,79 +709,43 @@ private fun BankSimulationTriggerRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Sensors,
-                        contentDescription = null,
-                        tint = VioletAccent,
-                        modifier = Modifier.size(18.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(EmeraldIncome)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Pipeline de Notificaciones Bancarias",
+                        text = "Captura Real de Bancos en Vivo",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MetallicSilverLight
                     )
                 }
-                Text(
-                    text = "Buzón",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RoyalIndigoLight,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onOpenInbox() }
-                )
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RoyalIndigo.copy(alpha = 0.3f))
+                        .clickable { onOpenInbox() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = "Ver Buzón →",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RoyalIndigoLight,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Simula o escucha notificaciones en tiempo real de bancos autorizados con deduplicación SHA-256:",
+                text = "Monitoreo en segundo plano activo para BBVA, Nu, Banorte, Santander y Citibanamex con deduplicación criptográfica SHA-256.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MetallicSilverMuted
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                BankQuickButton("BBVA", Color(0xFF004481)) { onSimulateBank("bbva") }
-                BankQuickButton("Nu", Color(0xFF820AD1)) { onSimulateBank("nu") }
-                BankQuickButton("Banorte", Color(0xFFB91C1C)) { onSimulateBank("banorte") }
-                BankQuickButton("Santander", Color(0xFFDC2626)) { onSimulateBank("santander") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BankQuickButton(
-    label: String,
-    accentColor: Color,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(CharcoalDark)
-            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(accentColor)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "+ $label",
-                fontFamily = JetBrainsMono,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MetallicSilverLight
+                color = MetallicSilverMuted,
+                lineHeight = 18.sp
             )
         }
     }
@@ -895,3 +946,231 @@ private fun TransactionItemRow(
         }
     }
 }
+
+@Composable
+fun FirebaseCloudSyncCard(
+    currentUser: com.google.firebase.auth.FirebaseUser?,
+    syncStatus: String,
+    onSyncNow: () -> Unit,
+    onRefreshUser: () -> Unit
+) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val scope = rememberCoroutineScope()
+    val credentialManager = remember { CredentialManager.create(context) }
+    var authError by remember { mutableStateOf<String?>(null) }
+    var isSigningIn by remember { mutableStateOf(false) }
+
+    AetherCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = if (currentUser != null) DarkSurfaceElevated else CharcoalDark,
+        borderColor = if (currentUser != null) RoyalIndigo.copy(alpha = 0.6f) else CharcoalBorder
+    ) {
+        Column {
+            if (currentUser != null) {
+                // Signed In View
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(RoyalIndigo),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (currentUser.displayName?.take(1) ?: currentUser.email?.take(1) ?: "U").uppercase(Locale.ROOT),
+                                fontFamily = JetBrainsMono,
+                                fontWeight = FontWeight.Bold,
+                                color = MetallicSilverLight,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = currentUser.displayName ?: "Usuario Conectado",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MetallicSilverLight
+                            )
+                            Text(
+                                text = currentUser.email ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MetallicSilverMuted
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(EmeraldIncome.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = EmeraldIncome,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = syncStatus.uppercase(Locale.ROOT),
+                                fontFamily = JetBrainsMono,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldIncome
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            GoogleAuthHelper.signOut(credentialManager, scope) {
+                                onRefreshUser()
+                            }
+                        },
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MetallicSilverMuted),
+                        contentPadding = PaddingValues(horizontal = 10.dp)
+                    ) {
+                        Text("Cerrar Sesión", fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = onSyncNow,
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Sincronizar Firestore", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                // Not Signed In View
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(RoyalIndigo.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = null,
+                            tint = VioletAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Respaldo en la Nube con Google",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MetallicSilverLight
+                        )
+                        Text(
+                            text = "Sincroniza tus finanzas en Firebase Firestore",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MetallicSilverMuted
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (authError != null) {
+                    Text(
+                        text = authError!!,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RubyExpense,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (activity != null) {
+                            isSigningIn = true
+                            authError = null
+                            GoogleAuthHelper.onGoogleSignInClicked(
+                                activity = activity,
+                                credentialManager = credentialManager,
+                                onAuthSuccess = {
+                                    isSigningIn = false
+                                    onRefreshUser()
+                                    onSyncNow()
+                                },
+                                onAuthError = { err ->
+                                    isSigningIn = false
+                                    authError = err
+                                },
+                                scope = scope,
+                                onAuthCancelled = {
+                                    isSigningIn = false
+                                }
+                            )
+                        }
+                    },
+                    enabled = !isSigningIn,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .testTag("google_sign_in_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RoyalIndigoLight,
+                        contentColor = MetallicSilverLight
+                    )
+                ) {
+                    if (isSigningIn) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MetallicSilverLight,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Conectando con Google...", fontSize = 12.sp)
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Iniciar Sesión con Google",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
