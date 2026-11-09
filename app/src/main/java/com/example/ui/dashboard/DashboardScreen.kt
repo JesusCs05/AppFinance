@@ -28,19 +28,25 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -110,6 +116,8 @@ fun DashboardScreen(
 
     var showNewAccountDialog by remember { mutableStateOf(false) }
     var showBudgetDialog by remember { mutableStateOf(false) }
+    var accountToEdit by remember { mutableStateOf<AccountEntity?>(null) }
+    var accountToDelete by remember { mutableStateOf<AccountEntity?>(null) }
 
     if (showNewAccountDialog) {
         com.example.ui.dialogs.NewAccountDialog(
@@ -117,6 +125,53 @@ fun DashboardScreen(
             onSave = { acc ->
                 viewModel.createNewAccount(acc)
                 showNewAccountDialog = false
+            }
+        )
+    }
+
+    if (accountToEdit != null) {
+        com.example.ui.dialogs.EditAccountDialog(
+            account = accountToEdit!!,
+            onDismiss = { accountToEdit = null },
+            onSave = { updated ->
+                viewModel.updateAccount(updated)
+                accountToEdit = null
+            }
+        )
+    }
+
+    if (accountToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { accountToDelete = null },
+            containerColor = DarkSurfaceElevated,
+            title = {
+                Text("¿Eliminar cuenta?", color = MetallicSilverLight, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Se eliminará la cuenta \"${accountToDelete!!.name}\" (*${accountToDelete!!.lastFourDigits}). Esta acción no se puede deshacer.",
+                    color = MetallicSilverMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteAccount(accountToDelete!!)
+                        accountToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RubyExpense)
+                ) {
+                    Text("Eliminar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { accountToDelete = null },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MetallicSilverMuted)
+                ) {
+                    Text("Cancelar")
+                }
             }
         )
     }
@@ -136,13 +191,15 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(DarkBackground)
             .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Top Header
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -314,7 +371,9 @@ fun DashboardScreen(
                         items(accounts) { account ->
                             AccountPillCard(
                                 account = account,
-                                isPrivacyHidden = isPrivacyMode
+                                isPrivacyHidden = isPrivacyMode,
+                                onEdit = { accountToEdit = account },
+                                onDelete = { accountToDelete = account }
                             )
                         }
                     }
@@ -737,17 +796,20 @@ private fun BankLiveListenerBanner(
 @Composable
 private fun AccountPillCard(
     account: AccountEntity,
-    isPrivacyHidden: Boolean
+    isPrivacyHidden: Boolean,
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     val brandColor = try {
         Color(android.graphics.Color.parseColor(account.colorHex))
     } catch (_: Exception) {
         RoyalIndigo
     }
+    var showMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
-            .width(160.dp)
+            .width(170.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(DarkSurfaceElevated)
             .border(1.dp, CharcoalBorder, RoundedCornerShape(16.dp))
@@ -759,18 +821,64 @@ private fun AccountPillCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(brandColor)
-                )
-                Text(
-                    text = "*${account.lastFourDigits}",
-                    fontFamily = JetBrainsMono,
-                    fontSize = 11.sp,
-                    color = MetallicSilverMuted
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(brandColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "*${account.lastFourDigits}",
+                        fontFamily = JetBrainsMono,
+                        fontSize = 11.sp,
+                        color = MetallicSilverMuted
+                    )
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Opciones de cuenta",
+                            tint = MetallicSilverMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier
+                            .background(DarkSurfaceElevated)
+                            .border(1.dp, CharcoalBorder, RoundedCornerShape(10.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Editar Cuenta", color = MetallicSilverLight, fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = null, tint = VioletAccent, modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Eliminar Cuenta", color = RubyExpense, fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = RubyExpense, modifier = Modifier.size(16.dp))
+                            },
+                            onClick = {
+                                showMenu = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

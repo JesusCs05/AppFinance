@@ -125,13 +125,15 @@ fun BankNotificationInboxScreen(
             .fillMaxSize()
             .background(DarkBackground)
             .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(

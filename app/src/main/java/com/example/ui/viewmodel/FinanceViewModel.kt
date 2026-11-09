@@ -92,6 +92,9 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     private val _editingTransaction = MutableStateFlow<TransactionEntity?>(null)
     val editingTransaction: StateFlow<TransactionEntity?> = _editingTransaction.asStateFlow()
 
+    private val _preselectedDate = MutableStateFlow<Long?>(null)
+    val preselectedDate: StateFlow<Long?> = _preselectedDate.asStateFlow()
+
     // Copilot State
     private val _copilotMessages = MutableStateFlow<List<CopilotMessage>>(
         listOf(
@@ -108,17 +111,20 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
     fun navigateTo(screen: AppScreen) {
         if (screen != AppScreen.CUSTOMIZE_TRANSACTION) {
             _editingTransaction.value = null
+            _preselectedDate.value = null
         }
         _currentScreen.value = screen
     }
 
-    fun openNewTransaction() {
+    fun openNewTransaction(initialDate: Long? = null) {
         _editingTransaction.value = null
+        _preselectedDate.value = initialDate
         _currentScreen.value = AppScreen.CUSTOMIZE_TRANSACTION
     }
 
     fun openEditTransaction(tx: TransactionEntity) {
         _editingTransaction.value = tx
+        _preselectedDate.value = null
         _currentScreen.value = AppScreen.CUSTOMIZE_TRANSACTION
     }
 
@@ -141,9 +147,27 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateAccount(account: AccountEntity) {
+        viewModelScope.launch {
+            repository.updateAccount(account)
+        }
+    }
+
+    fun deleteAccount(account: AccountEntity) {
+        viewModelScope.launch {
+            repository.deleteAccount(account)
+        }
+    }
+
     fun updateCategoryBudget(category: CategoryEntity) {
         viewModelScope.launch {
             repository.updateCategory(category)
+        }
+    }
+
+    fun clearCategoryBudget(category: CategoryEntity) {
+        viewModelScope.launch {
+            repository.updateCategory(category.copy(monthlyLimit = 0.0))
         }
     }
 

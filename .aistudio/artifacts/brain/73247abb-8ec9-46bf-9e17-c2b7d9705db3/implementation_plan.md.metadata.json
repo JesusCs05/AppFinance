@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan arquitectónico detallado para:\n1. Eliminar completamente Firebase (Auth, Firestore, App Check y Google Services) transformando AetherPay en una aplicación 100% offline-first con SQLite/Room.\n2. Iniciar con estado limpio de cero datos (0 cuentas, 0 transacciones, 0 borradores), incorporando estados vacíos elegantes y flujo de creación inicial.\n3. Permitir configuración opcional de clave de API de Gemini para el Copiloto Financiero con motor analítico local integrado.\n4. Integrar la captura y procesamiento de notificaciones de Mercado Pago (compras, pagos con tarjeta, transferencias y dinero recibido).",
-  "updatedAt":  "2026-11-08T17:37:10.011848105Z",
+  "summary":  "Plan de implementación para mejoras del Calendario financiero con acciones a futuro y selector de fechas, gestión completa de cuentas/tarjetas (edición y eliminación con menú de 3 puntos), y administración de presupuestos por categoría.",
+  "updatedAt":  "2026-11-08T18:38:55.600212722Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

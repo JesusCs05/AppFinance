@@ -25,10 +25,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EditCalendar
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -36,18 +39,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,14 +91,25 @@ import com.example.ui.theme.VioletAccent
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.FinanceViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionCustomizerScreen(
     viewModel: FinanceViewModel,
     modifier: Modifier = Modifier
 ) {
     val editingTx by viewModel.editingTransaction.collectAsStateWithLifecycle()
+    val preselectedDate by viewModel.preselectedDate.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+
+    val initialDate = editingTx?.occurredAt ?: preselectedDate ?: System.currentTimeMillis()
+    var selectedTimestamp by remember(editingTx, preselectedDate) {
+        mutableLongStateOf(initialDate)
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val dateFormat = remember { SimpleDateFormat("EEEE, d 'de' MMMM yyyy", Locale("es", "MX")) }
+    val isFutureDate = selectedTimestamp > (System.currentTimeMillis() + 60_000L)
 
     var selectedType by remember(editingTx) { mutableStateOf(editingTx?.type ?: "expense") }
     var rawAmountString by remember(editingTx) {
@@ -106,18 +132,92 @@ fun TransactionCustomizerScreen(
 
     val filteredCategories = categories.filter { it.kind == selectedType }
 
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedTimestamp
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { utcMillis ->
+                            val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                                timeInMillis = utcMillis
+                            }
+                            val localCal = Calendar.getInstance().apply {
+                                set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH), 12, 0, 0)
+                            }
+                            selectedTimestamp = localCal.timeInMillis
+                        }
+                        showDatePicker = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight)
+                ) {
+                    Text("Aceptar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDatePicker = false },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MetallicSilverMuted)
+                ) {
+                    Text("Cancelar")
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = DarkSurfaceElevated,
+                titleContentColor = MetallicSilverLight,
+                headlineContentColor = MetallicSilverLight,
+                weekdayContentColor = MetallicSilverMuted,
+                subheadContentColor = MetallicSilverLight,
+                yearContentColor = MetallicSilverLight,
+                currentYearContentColor = VioletAccent,
+                selectedYearContentColor = MetallicSilverLight,
+                selectedYearContainerColor = RoyalIndigoLight,
+                dayContentColor = MetallicSilverLight,
+                selectedDayContainerColor = RoyalIndigoLight,
+                selectedDayContentColor = MetallicSilverLight,
+                todayContentColor = VioletAccent,
+                todayDateBorderColor = VioletAccent
+            )
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = DarkSurfaceElevated,
+                    titleContentColor = MetallicSilverLight,
+                    headlineContentColor = MetallicSilverLight,
+                    weekdayContentColor = MetallicSilverMuted,
+                    subheadContentColor = MetallicSilverLight,
+                    yearContentColor = MetallicSilverLight,
+                    currentYearContentColor = VioletAccent,
+                    selectedYearContentColor = MetallicSilverLight,
+                    selectedYearContainerColor = RoyalIndigoLight,
+                    dayContentColor = MetallicSilverLight,
+                    selectedDayContainerColor = RoyalIndigoLight,
+                    selectedDayContentColor = MetallicSilverLight,
+                    todayContentColor = VioletAccent,
+                    todayDateBorderColor = VioletAccent
+                )
+            )
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
             .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Top Header
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -297,6 +397,90 @@ fun TransactionCustomizerScreen(
                         color = MetallicSilverMuted,
                         fontSize = 11.sp
                     )
+                }
+            }
+        }
+
+        // Date Selector Card
+        item {
+            AetherCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true },
+                borderColor = if (isFutureDate) VioletAccent.copy(alpha = 0.6f) else CharcoalBorder
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isFutureDate) VioletAccent.copy(alpha = 0.2f) else RoyalIndigo.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isFutureDate) Icons.Default.Schedule else Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = if (isFutureDate) VioletAccent else RoyalIndigoLight,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Fecha del Movimiento",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MetallicSilverMuted
+                                )
+                                Text(
+                                    text = dateFormat.format(Date(selectedTimestamp)).replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MetallicSilverLight
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.EditCalendar,
+                            contentDescription = "Cambiar fecha",
+                            tint = if (isFutureDate) VioletAccent else MetallicSilverMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    if (isFutureDate) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(VioletAccent.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = VioletAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Acción Programada a Futuro: Se mostrará en el calendario con alerta de compromiso.",
+                                    fontFamily = JetBrainsMono,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MetallicSilverLight
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -520,7 +704,7 @@ fun TransactionCustomizerScreen(
                             type = selectedType,
                             amount = amountVal,
                             merchant = merchantText.trim(),
-                            occurredAt = editingTx?.occurredAt ?: System.currentTimeMillis(),
+                            occurredAt = selectedTimestamp,
                             notes = notesText.trim(),
                             source = editingTx?.source ?: "manual",
                             isRecurring = isRecurring,

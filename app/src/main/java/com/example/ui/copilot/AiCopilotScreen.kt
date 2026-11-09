@@ -213,7 +213,7 @@ fun AiCopilotScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 10.dp),
+                .padding(top = 20.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(

@@ -1,97 +1,114 @@
-# Plan de Implementación: Desacoplamiento de Firebase, Inicio en Cero Datos y Detección de Mercado Pago
+# Plan de Implementación: Calendario Futuro, Selector de Fechas y Gestión de Tarjetas y Presupuestos
 
-Eliminar toda la infraestructura de Firebase y Google Services para convertir a AetherPay en una aplicación financiera 100% privada, local y offline (Room SQLite), iniciando con cero datos y soporte nativo para notificaciones de Mercado Pago.
+Plan para enriquecer el calendario financiero con registro de movimientos a futuro, selector de fecha interactivo en la creación/edición de transacciones, administración completa de cuentas/tarjetas (edición y eliminación mediante menú contextual de 3 puntos) y gestión avanzada de presupuestos por categoría.
 
-## Decisiones Críticas y Revisión del Usuario
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> A partir de tus respuestas en la fase de aclaración, se confirman las siguientes decisiones de diseño:
-> - **Copiloto Financiero**: Operará con un potente motor analítico local sin conexión, con opción en la interfaz para ingresar una clave de API de Gemini propia si se desea análisis generativo avanzado.
-> - **Inicio sin datos**: La base de datos comenzará completamente vacía (0 cuentas, 0 transacciones, 0 borradores) y la pantalla principal mostrará un estado vacío refinado con llamada a la acción para crear la primera cuenta.
-> - **Mercado Pago**: Detección integral para transferencias enviadas/recibidas, compras en línea y pagos con tarjeta física/virtual de Mercado Pago.
+> Decisiones confirmadas a partir de las respuestas del usuario en Fase 1:
+> - **Visualización de movimientos a futuro**: Se marcarán como **movimientos programados** con indicador visual destacado (píldora violeta/ámbar con icono de reloj/calendario) y alerta de fecha/vencimiento tanto en el Calendario como en el Dashboard.
+> - **Gestión de cuentas y tarjetas**: Cada tarjeta en el carrusel de cuentas contará con un **menú de 3 puntos (`MoreVert`)** accesible que desplegará las opciones de **Editar Cuenta** y **Eliminar Cuenta** (con confirmación de seguridad).
+> - **Presupuestos por categoría**: Se añadirá la capacidad de editar montos directamente por teclado o deslizador, y el botón para **Eliminar/Restablecer Presupuesto** (fijando límite en $0.00 / sin límite activo).
 
 ---
 
-## 1. Visión General y Experiencia de Usuario
+## 1. Overview & Core Concept
 
-- **Privacidad Total y Rendimiento Instantáneo**: Al eliminar dependencias de red externas y servicios en segundo plano de Google Services, el APK compila más rápido, es más ligero y arranca instantáneamente sin riesgo de bloqueos por falta de credenciales en la nube.
-- **Flujo de Primer Uso (Zero-State)**: El usuario abre la app y encuentra un dashboard oscuro con acabados metálicos y un estado vacío que lo invita a registrar su primera cuenta (Efectivo, Débito, Crédito, etc.).
-- **Bandeja de Entrada Bancaria Ampliada**: Notificaciones en vivo de los principales bancos de México más **Mercado Pago**, con chips de filtro y conversión automática en borradores listos para asentar.
-
----
-
-## 2. Experiencia Visual y Diseño
-
-- **Estética Dark Obsidian & M3**:
-  - Fondo `DarkBackground` (`#0D0F14`) con acentos `RoyalIndigo` (`#6366F1`) y `MercadoPagoBlue` (`#009EE3`).
-  - Tarjetas con bordes ultra-finos (`CharcoalBorder`) y contraste elevado.
-- **Estados Vacíos con Estilo**:
-  - Ilustración/ícono central con mensaje inspirador: *"Tu lienzo financiero está listo. Crea tu primera cuenta para comenzar a registrar tus finanzas."*
-  - Botón prominente de acción directa: `+ Crear primera cuenta`.
-- **Configuración de IA en Copiloto**:
-  - Tarjeta o diálogo de ajustes en la pantalla del Copiloto para introducir/guardar la clave de Gemini opcionalmente de forma segura en `EncryptedSharedPreferences` / `DataStore`.
+- **Qué resuelve**: Actualmente, la creación de transacciones asume siempre el momento actual (`System.currentTimeMillis()`) y el calendario sólo muestra lo ocurrido en el pasado. El usuario necesita planificar gastos/ingresos futuros (pagos de servicios, vencimientos de tarjetas, cobros programados) con un selector de fecha accesible, poder añadir un movimiento directamente en el día seleccionado del calendario, y tener control total sobre sus tarjetas/cuentas y presupuestos para modificarlos o borrarlos según cambie su realidad financiera.
+- **Público objetivo**: Usuarios que administran finanzas personales activas en México/LATAM y desean anticipar sus compromisos financieros en lugar de sólo registrarlos después de que ocurrieron.
+- **Valor clave**: Transformar AetherPay de una libreta de registro histórico a un **planificador financiero interactivo y proactivo**.
 
 ---
 
-## 3. Decisiones Técnicas y de Arquitectura
+## 2. User Experience & Visual Design
+
+### 2.1 Flujo del Calendario y Acciones a Futuro
+1. **Navegación y Selección de Fechas**:
+   - El usuario navega entre meses y pulsa cualquier día (pasado, presente o futuro).
+   - En la tarjeta del día seleccionado se visualizan los movimientos agrupados:
+     - Movimientos ya ejecutados (verde para ingresos, rojo para gastos).
+     - **Compromisos y Gastos Futuros Programados**: Mostrados con una tarjeta distintiva de borde acentuado en violeta/ámbar y etiqueta `"PROGRAMADO"`.
+2. **Botón "+ Añadir en esta fecha"**:
+   - En la tarjeta del día seleccionado se añade el botón de acción rápida `+ Añadir en este día`, el cual abre la pantalla de transacción preseleccionando la fecha seleccionada.
+3. **Indicador de puntos en la cuadrícula mensual**:
+   - Días con movimientos futuros mostrarán un punto ámbar/violeta distintivo para identificar visualmente compromisos pendientes en el mes.
+
+### 2.2 Selector de Fecha en Formulario de Transacción (`TransactionCustomizerScreen`)
+- **Tarjeta de Fecha Interactiva**:
+  - Ubicada prominentemente en el formulario debajo del tipo de movimiento y monto.
+  - Muestra la fecha seleccionada en formato amigable: *"Hoy, 8 de noviembre"*, *"Mañana, 9 de noviembre"* o *"Jueves, 15 de noviembre"*.
+  - Al pulsar la tarjeta, se despliega el **`DatePickerDialog` de Material 3**.
+  - Si la fecha seleccionada es posterior al día de hoy, se activa automáticamente la insignia visual: **"Acción Programada a Futuro"** con tono violeta y texto aclaratorio.
+
+### 2.3 Gestión de Cuentas y Tarjetas (`AccountPillCard`)
+- En el carrusel de cuentas, cada tarjeta incluye un icono discreto de 3 puntos verticales (`MoreVert`) con tamaño táctil accesible (48dp).
+- Al pulsar el menú se presentan:
+  - **Editar Cuenta**: Abre el diálogo `EditAccountDialog` prellenado con nombre, tipo, últimos 4 dígitos, saldo y color.
+  - **Eliminar Cuenta**: Despliega un diálogo de confirmación de advertencia antes de remover la cuenta.
+
+### 2.4 Gestión de Presupuestos (`CategoryBudgetEditorDialog`)
+- Cada categoría de gasto incluye:
+  - Entrada de texto para escribir el límite mensual exacto y barra deslizante.
+  - Botón `"Eliminar Presupuesto"` / `"Restablecer"` para dejar la categoría sin presupuesto activo.
+  - Indicador de estado: *"Sin límite"* o *"Presupuesto: $X MXN"*.
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Tratamiento de Transacciones Futuras**:
+  - *Decisión*: Almacenar las transacciones futuras en la tabla `transactions` con su marca de tiempo `occurredAt` en el futuro. En los cálculos de balance actual del Dashboard se calcula el balance consolidado actual y se muestra un bloque de `"Próximos Vencimientos y Compromisos"` para que el saldo actual no se confunda con desembolsos aún no efectuados.
+  - *Razón*: Mantiene la integridad del modelo de datos sin requerir migraciones complejas ni tablas duplicadas, mientras permite que el Calendario y el Dashboard muestren la línea de tiempo completa.
+- **Edición y Eliminación en Base de Datos**:
+  - *Decisión*: `AccountDao` ya cuenta con `updateAccount` y `deleteAccount`. Se exponen directamente en `FinanceRepository` y `FinanceViewModel` para actualizar reactivamente los `StateFlow` recolectados en Compose.
+
+---
+
+## 4. Technical Architecture & Data Strategy
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   AetherPay UI Layer                   │
-│   Dashboard  │  Transacciones  │  Copiloto  │  Inbox   │
-└───────────────────────────┬────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│                    FinanceViewModel                    │
-│   (Estado de cuentas, transacciones, filtros, drafts)  │
-└─────────────┬───────────────────────────┬──────────────┘
-              │                           │
-┌─────────────▼─────────────┐ ┌───────────▼──────────────┐
-│     FinanceRepository     │ │   GeminiCopilotService   │
-│   (Room DAO / SQLite)     │ │ Local Engine / Gemini API│
-└─────────────┬─────────────┘ └──────────────────────────┘
-              │
-┌─────────────▼──────────────────────────────────────────┐
-│                   AppDatabase (Room)                   │
-│    accounts  │  transactions  │  categories  │ drafts  │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Jetpack Compose UI                             │
+├──────────────────────────┬─────────────────────────┬───────────────────┤
+│ CalendarAnalyticsScreen  │ TransactionCustomizer   │ DashboardScreen   │
+│ - Días futuros/pasados   │ - DatePicker selector   │ - 3-dots Menu en  │
+│ - Botón "+ Añadir fecha" │ - "Acción Programada"   │   AccountPillCard │
+│ - Badges "PROGRAMADO"    │ - Default: Hoy / Pre-sel│ - Budget Dialog   │
+└────────────┬─────────────┴────────────┬────────────┴─────────┬─────────┘
+             │                          │                      │
+             ▼                          ▼                      ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                          FinanceViewModel                              │
+│ - openNewTransaction(initialDate: Long?)                               │
+│ - updateAccount(account: AccountEntity)                                │
+│ - deleteAccount(account: AccountEntity)                                │
+│ - updateCategoryBudget(category: CategoryEntity)                       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                    Room Local Database (aetherpay_clean.db)            │
+│ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────┐ │
+│ │   TransactionEntity  │ │    AccountEntity     │ │  CategoryEntity  │ │
+│ │ occurredAt (futuro)  │ │   CRUD completo      │ │ monthlyLimit: 0  │ │
+│ └──────────────────────┘ └──────────────────────┘ └──────────────────┘ │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Desinstalación de Firebase y Google Services**:
-   - Eliminar de `build.gradle.kts` y `libs.versions.toml`: `google-services`, `firebase-bom`, `firebase-ai`, `firebase-firestore`, `firebase-auth`, `firebase-appcheck`, `credentials`, `googleid`.
-   - Limpiar el workflow de CI `.github/workflows/build-apk.yml` de scripts de restauración de `google-services.json`.
-   - Eliminar `FirestoreSyncService.kt`, `FirestoreSyncManager.kt`, `GoogleAuthHelper.kt` y `AppCheckUtil.kt`.
-2. **Cero Datos Iniciales (Zero Seed)**:
-   - Limpiar el `seedDatabase` de `AppDatabase.kt`: no insertar cuentas ni transacciones mock. Solo predefinir las categorías estándar del sistema con saldo 0 (Alimentos, Transporte, Hogar, Entretenimiento, Salud, Nómina, etc.) para que el usuario pueda categorizar de inmediato.
-3. **Módulo de Mercado Pago (`BankNotificationParser.kt`)**:
-   - Identificador de paquete: `com.mercadopago.wallet` y `com.mercadolibre`.
-   - Expresiones regulares y reglas léxicas para:
-     - `Transferiste \$([0-9.,]+) a (.*)` -> Gasto / Transferencia
-     - `Te transfirieron \$([0-9.,]+) de (.*)` / `Recibiste \$([0-9.,]+)` -> Ingreso / Dinero recibido
-     - `Pagaste \$([0-9.,]+) en (.*)` / `Pago aprobado de \$([0-9.,]+)` -> Gasto / Compra
-     - `Compra con tu tarjeta Mercado Pago por \$([0-9.,]+) en (.*)` -> Gasto / Tarjeta MP
-   - Mapeo automático de categorías y almacenamiento de borrador en Room.
-4. **Copiloto Híbrido**:
-   - `AiCopilotEngine` ejecuta el análisis financiero local con estadísticas instantáneas y sugerencias de ahorro.
-   - Si el usuario suministra una API Key de Gemini en los ajustes del Copiloto, se realizan consultas directas HTTP a la API REST de Gemini (`generativelanguage.googleapis.com`) sin requerir Firebase.
-
----
-
-## 4. Plan de Ejecución Paso a Paso
-
-1. **Paso 1: Limpieza de Gradle y Dependencias**:
-   - Remover plugins y dependencias de Firebase/Google Services en `app/build.gradle.kts`.
-   - Simplificar `.github/workflows/build-apk.yml`.
-2. **Paso 2: Eliminación de Servicios y Clases Firebase**:
-   - Eliminar `FirestoreSyncService.kt`, `FirestoreSyncManager.kt`, `GoogleAuthHelper.kt` y `AppCheckUtil.kt`.
-   - Ajustar `MainActivity.kt` para remover inicializaciones de Firebase/AppCheck.
-3. **Paso 3: Depuración de Base de Datos y Cero Datos**:
-   - Modificar `AppDatabase.kt` para eliminar la inserción de cuentas y transacciones demo.
-   - Ajustar `DashboardScreen.kt` para mostrar el nuevo estado vacío con botón interactivo de creación.
-4. **Paso 4: Implementación de Parser para Mercado Pago**:
-   - Agregar patrones y constantes de Mercado Pago en `BankNotificationParser.kt`.
-   - Agregar chip de filtro e icono distintivo de Mercado Pago en `BankNotificationInboxScreen.kt`.
-5. **Paso 5: Copiloto sin Firebase y Clave Opcional**:
-   - Adaptar `GeminiCopilotService.kt` y `AiCopilotScreen.kt` con selector/diálogo de API Key opcional y motor local predeterminado.
-6. **Paso 6: Verificación y Compilación**:
-   - Ejecutar `compile_applet` y pruebas unitarias de parseo de Mercado Pago con Robolectric.
+### Componentes a Modificar:
+1. **`TransactionCustomizerScreen.kt`**:
+   - Integrar selector de fecha Material 3 con formato amigable.
+   - Soportar `initialDate` pasado desde el ViewModel.
+   - Guardar `occurredAt` con la fecha seleccionada por el usuario.
+2. **`CalendarAnalyticsScreen.kt`**:
+   - Añadir botón `+ Añadir en esta fecha`.
+   - Distinguir transacciones futuras con distintivo `"PROGRAMADO"`.
+   - Soporte de multi-puntos con color violeta para compromisos futuros.
+3. **`AccountBudgetDialogs.kt`**:
+   - Añadir `EditAccountDialog` reutilizable con datos existentes.
+   - Enriquecer `CategoryBudgetEditorDialog` con eliminación/restablecimiento de presupuesto y campo numérico.
+4. **`DashboardScreen.kt`**:
+   - Actualizar `AccountPillCard` con menú de 3 puntos (`MoreVert`), `DropdownMenu`, acciones de editar y eliminar cuenta.
+5. **`FinanceViewModel.kt`**:
+   - Agregar `_preselectedDate: MutableStateFlow<Long?>` y firma `openNewTransaction(initialDate: Long? = null)`.
+   - Añadir funciones `updateAccount(account: AccountEntity)` y `deleteAccount(account: AccountEntity)`.

@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -239,6 +241,177 @@ fun NewAccountDialog(
 }
 
 @Composable
+fun EditAccountDialog(
+    account: AccountEntity,
+    onDismiss: () -> Unit,
+    onSave: (AccountEntity) -> Unit
+) {
+    var name by remember { mutableStateOf(account.name) }
+    var selectedType by remember { mutableStateOf(account.type) }
+    var lastFour by remember { mutableStateOf(account.lastFourDigits) }
+    var balanceText by remember { mutableStateOf(if (account.balance == 0.0) "" else "%.2f".format(account.balance).replace(",", ".")) }
+    var selectedColor by remember { mutableStateOf(account.colorHex) }
+
+    val colors = listOf("#4B0082", "#004481", "#820AD1", "#EC0000", "#10B981", "#F59E0B", "#06B6D4")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = CharcoalCard,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CharcoalBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Editar Cuenta / Tarjeta",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MetallicSilverLight
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = MetallicSilverMuted)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre de la cuenta") },
+                    placeholder = { Text("Ej. BBVA Nómina, Nu Crédito, Efectivo") },
+                    modifier = Modifier.fillMaxWidth().testTag("edit_account_name_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = DarkSurfaceElevated,
+                        unfocusedContainerColor = CharcoalDark,
+                        focusedBorderColor = RoyalIndigoLight,
+                        unfocusedBorderColor = CharcoalBorder,
+                        focusedTextColor = MetallicSilverLight,
+                        unfocusedTextColor = MetallicSilverLight
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Type selector
+                Text(text = "Tipo de Cuenta:", style = MaterialTheme.typography.labelSmall, color = MetallicSilverMuted)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("debit" to "Débito", "credit" to "Crédito", "cash" to "Efectivo", "investment" to "Inversión").forEach { (typeKey, label) ->
+                        val isSel = selectedType == typeKey
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSel) RoyalIndigo else CharcoalDark)
+                                .border(1.dp, if (isSel) RoyalIndigoLight else CharcoalBorder, RoundedCornerShape(8.dp))
+                                .clickable { selectedType = typeKey }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSel) MetallicSilverLight else MetallicSilverMuted
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = lastFour,
+                        onValueChange = { if (it.length <= 4) lastFour = it },
+                        label = { Text("Últimos 4 dígitos") },
+                        placeholder = { Text("4821") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = DarkSurfaceElevated,
+                            unfocusedContainerColor = CharcoalDark,
+                            focusedBorderColor = RoyalIndigoLight,
+                            unfocusedBorderColor = CharcoalBorder,
+                            focusedTextColor = MetallicSilverLight,
+                            unfocusedTextColor = MetallicSilverLight
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = balanceText,
+                        onValueChange = { balanceText = it },
+                        label = { Text("Saldo actual") },
+                        placeholder = { Text("0.00") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = DarkSurfaceElevated,
+                            unfocusedContainerColor = CharcoalDark,
+                            focusedBorderColor = RoyalIndigoLight,
+                            unfocusedBorderColor = CharcoalBorder,
+                            focusedTextColor = MetallicSilverLight,
+                            unfocusedTextColor = MetallicSilverLight
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(text = "Color Identificador:", style = MaterialTheme.typography.labelSmall, color = MetallicSilverMuted)
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(colors) { hex ->
+                        val color = Color(android.graphics.Color.parseColor(hex))
+                        val isSel = selectedColor == hex
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(2.dp, if (isSel) MetallicSilverLight else Color.Transparent, CircleShape)
+                                .clickable { selectedColor = hex }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = {
+                        val bal = balanceText.toDoubleOrNull() ?: account.balance
+                        val updated = account.copy(
+                            name = name.trim().ifEmpty { account.name },
+                            type = selectedType,
+                            lastFourDigits = lastFour.trim().ifEmpty { account.lastFourDigits },
+                            balance = bal,
+                            colorHex = selectedColor
+                        )
+                        onSave(updated)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight)
+                ) {
+                    Text("Actualizar Cuenta", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CategoryBudgetEditorDialog(
     categories: List<CategoryEntity>,
     onDismiss: () -> Unit,
@@ -277,7 +450,7 @@ fun CategoryBudgetEditorDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().height(360.dp),
+                    modifier = Modifier.fillMaxWidth().height(380.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(expenseCategories) { cat ->
@@ -321,13 +494,22 @@ fun CategoryBudgetEditorDialog(
                                         Text(text = cat.name, style = MaterialTheme.typography.titleSmall, color = MetallicSilverLight)
                                     }
 
-                                    Text(
-                                        text = "$${"%,.0f".format(currentLimit)} MXN",
-                                        fontFamily = JetBrainsMono,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = EmeraldIncome
-                                    )
+                                    if (currentLimit > 0) {
+                                        Text(
+                                            text = "$${"%,.0f".format(currentLimit)} MXN",
+                                            fontFamily = JetBrainsMono,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = EmeraldIncome
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "Sin límite",
+                                            fontFamily = JetBrainsMono,
+                                            fontSize = 11.sp,
+                                            color = MetallicSilverMuted
+                                        )
+                                    }
                                 }
 
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -346,6 +528,55 @@ fun CategoryBudgetEditorDialog(
                                         inactiveTrackColor = CharcoalDark
                                     )
                                 )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf(1000.0 to "+1k", 2500.0 to "+2.5k", 5000.0 to "+5k").forEach { (amount, lbl) ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(CharcoalDark)
+                                                    .clickable {
+                                                        currentLimit = amount
+                                                        onSaveCategory(cat.copy(monthlyLimit = amount))
+                                                    }
+                                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                                            ) {
+                                                Text(text = lbl, fontSize = 9.sp, fontFamily = JetBrainsMono, color = MetallicSilverLight)
+                                            }
+                                        }
+                                    }
+
+                                    if (currentLimit > 0) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clickable {
+                                                    currentLimit = 0.0
+                                                    onSaveCategory(cat.copy(monthlyLimit = 0.0))
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Quitar Presupuesto",
+                                                tint = RubyExpense,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = "Quitar límite",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = RubyExpense,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

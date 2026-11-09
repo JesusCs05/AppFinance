@@ -22,9 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -109,13 +113,15 @@ fun CalendarAnalyticsScreen(
             .fillMaxSize()
             .background(DarkBackground)
             .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Month Navigation Header
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -222,9 +228,11 @@ fun CalendarAnalyticsScreen(
                                         val calTx = Calendar.getInstance().apply { timeInMillis = tx.occurredAt }
                                         calTx.get(Calendar.DAY_OF_MONTH) == currentDayVal
                                     }
+                                    val now = System.currentTimeMillis() + 60_000L
                                     val hasIncome = dayTxs.any { it.type == "income" }
                                     val hasExpense = dayTxs.any { it.type == "expense" }
                                     val hasRecurring = dayTxs.any { it.source == "recurring" }
+                                    val hasFuture = dayTxs.any { it.occurredAt > now }
 
                                     Box(
                                         modifier = Modifier
@@ -253,7 +261,7 @@ fun CalendarAnalyticsScreen(
                                                 color = if (isSelected) MetallicSilverLight else if (dayTxs.isNotEmpty()) MetallicSilverLight else MetallicSilverMuted
                                             )
 
-                                            // Multi-dot indicators per spec: Green for Income, Red for Expense, Indigo for Recurring
+                                            // Multi-dot indicators: Green for Income, Red for Expense, Violet for Recurring/Future
                                             Row(
                                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                                 modifier = Modifier.padding(top = 2.dp)
@@ -264,7 +272,7 @@ fun CalendarAnalyticsScreen(
                                                 if (hasExpense) {
                                                     Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(RubyExpense))
                                                 }
-                                                if (hasRecurring) {
+                                                if (hasRecurring || hasFuture) {
                                                     Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(VioletAccent))
                                                 }
                                             }
@@ -285,10 +293,10 @@ fun CalendarAnalyticsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         DotLegendItem(color = EmeraldIncome, label = "Ingreso")
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
                         DotLegendItem(color = RubyExpense, label = "Gasto")
-                        Spacer(modifier = Modifier.width(16.dp))
-                        DotLegendItem(color = VioletAccent, label = "Recurrente")
+                        Spacer(modifier = Modifier.width(14.dp))
+                        DotLegendItem(color = VioletAccent, label = "Programado")
                     }
                 }
             }
@@ -356,6 +364,57 @@ fun CalendarAnalyticsScreen(
                             }
                         }
                     }
+
+                    val hasFutureTx = selectedDayTransactions.any { it.occurredAt > System.currentTimeMillis() + 60_000L }
+                    if (hasFutureTx) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(VioletAccent.copy(alpha = 0.15f))
+                                .border(1.dp, VioletAccent.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = VioletAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Compromiso futuro programado para esta fecha",
+                                    fontFamily = JetBrainsMono,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MetallicSilverLight
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.openNewTransaction(selectedDateCal.timeInMillis)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalIndigoLight)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "+ Añadir movimiento en esta fecha",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -379,7 +438,12 @@ fun CalendarAnalyticsScreen(
         } else {
             items(selectedDayTransactions) { tx ->
                 val category = categories.find { it.id == tx.categoryId }
-                SelectedDayTxRow(transaction = tx, category = category, isPrivacyHidden = isPrivacyMode)
+                SelectedDayTxRow(
+                    transaction = tx,
+                    category = category,
+                    isPrivacyHidden = isPrivacyMode,
+                    onClick = { viewModel.openEditTransaction(tx) }
+                )
             }
         }
 
@@ -485,20 +549,27 @@ private fun DotLegendItem(color: Color, label: String) {
 private fun SelectedDayTxRow(
     transaction: TransactionEntity,
     category: CategoryEntity?,
-    isPrivacyHidden: Boolean
+    isPrivacyHidden: Boolean,
+    onClick: () -> Unit = {}
 ) {
     val categoryColor = try {
         Color(android.graphics.Color.parseColor(category?.colorHex ?: "#4B0082"))
     } catch (_: Exception) {
         RoyalIndigoLight
     }
+    val isFuture = transaction.occurredAt > (System.currentTimeMillis() + 60_000L)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(DarkSurfaceElevated)
-            .border(1.dp, CharcoalBorder, RoundedCornerShape(14.dp))
+            .border(
+                1.dp,
+                if (isFuture) VioletAccent.copy(alpha = 0.5f) else CharcoalBorder,
+                RoundedCornerShape(14.dp)
+            )
+            .clickable { onClick() }
             .padding(12.dp)
     ) {
         Row(
@@ -506,7 +577,7 @@ private fun SelectedDayTxRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -523,12 +594,31 @@ private fun SelectedDayTxRow(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
-                    Text(
-                        text = transaction.merchant,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MetallicSilverLight,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = transaction.merchant,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MetallicSilverLight,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (isFuture) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(VioletAccent.copy(alpha = 0.2f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "PROGRAMADO",
+                                    fontFamily = JetBrainsMono,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = VioletAccent
+                                )
+                            }
+                        }
+                    }
                     Text(
                         text = category?.name ?: "General",
                         style = MaterialTheme.typography.labelSmall,

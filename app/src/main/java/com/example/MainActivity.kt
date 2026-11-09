@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -131,7 +132,7 @@ fun AetherPayApp(viewModel: FinanceViewModel) {
             }
         },
         floatingActionButton = {
-            if (currentScreen == AppScreen.DASHBOARD || currentScreen == AppScreen.CALENDAR) {
+            if (currentScreen == AppScreen.DASHBOARD) {
                 FloatingActionButton(
                     onClick = { viewModel.openNewTransaction() },
                     containerColor = RoyalIndigoLight,
@@ -152,6 +153,7 @@ fun AetherPayApp(viewModel: FinanceViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .statusBarsPadding()
         ) {
             Crossfade(targetState = currentScreen, label = "screen_transition") { screen ->
                 when (screen) {

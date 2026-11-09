@@ -97,6 +97,7 @@ class FinanceRepository(private val database: AppDatabase) {
     // Account mutations
     suspend fun insertAccount(account: AccountEntity) = accountDao.insertAccount(account)
     suspend fun updateAccount(account: AccountEntity) = accountDao.updateAccount(account)
+    suspend fun deleteAccount(account: AccountEntity) = accountDao.deleteAccount(account)
 
     // Category mutations
     suspend fun updateCategory(category: CategoryEntity) = categoryDao.insertCategory(category)
